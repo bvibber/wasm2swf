@@ -1,0 +1,14 @@
+{
+  "name": "wasm2swf",
+  "version": "0.1.0",
+  "description": "WebAssembly to ActionScript3 bytecode compiler",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Brion Vibber <brion@pobox.com>",
+  "license": "MIT",
+  "dependencies": {
+    "binaryen": "^89.0.0-nightly.20191219"
+  }
+}
