@@ -1,36 +1,66 @@
-# wasm2abc
+# wasm2swf
 
-A highly experimental WebAssembly to ActionScript 3 bytecode compiler.
+A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
-## Implementation details
+## What?
+
+This aims to be a tool that compiles standalone WebAssembly modules (`.wasm`) into ActionScript bytecode (`.abc`) files implementing a class which can be loaded and used by ActionScript 3 code in a Flash "movie" (`.swf`).
+
+## Why?
+
+Niche interest: for legacy Internet Explorer 11 support, JavaScript cross-compilation with emscripten or wasm2js produces workable code but has relatively poor performance and lacks threading. Since IE 11 comes with Flash (assuming Microsoft or Adobe don't flip a global kill switch) and Flash's ActionScript Virtual Machine (AVM2) is in some ways more advanced, it's worth investigating conversion.
+
+## How?
+
+The old FlasCC/CrossBridge compiler for C/C++ is an existence proof for the possibility of running C-like code in AVM2. The frontend compilers are done for us from whatever produced the WebAssembly, so it has a smaller footprint than an entire compiler set.
 
 ### Wasm and AVM2 similaries
 
-Both WebAssembly and AVM2 bytecode are for a stack-based virtual machine, with typed values. AVM2 supports various magic OO and string stuff we won't use much, but doesn't support some arithmetic types we could use.
+Both WebAssembly and AVM2 bytecode are for a stack-based virtual machine, with typed values including 32-bit integers and floating point. AVM2 supports various magic OO and string stuff we won't use much here.
 
-Linear memory maps well to use of a ByteArray linked up to "domain memory", with optimized load and store instructions.
+Linear memory maps well to use of a ByteArray linked up to "domain memory", with optimized load and store instructions. However it may be necessary to reestablish the domain memory linkage at the wasm2swf <-> ActionScript call boundary, as it's global state.
 
-Arguments and locals go into a register-like list of locals with compile-time constant indexes on the get/set opcodes, which is very similar.
+Arguments and locals go into a register-like list with compile-time constant indexes on the get/set opcodes, which is very similar. (The indexes must be offset by one, as index 0 holds the ActionScript `this` argument.)
 
-Globals can live in an array; function imports and local function references can live in the closure. The dynamic function table can be an array.
+Globals and function imports can live as indexed property slots on the module instance; local function references as indexed methods for direct calls. The dynamic function table for indirect calls can be an array, itself living as a property on the module.
+
+I'm not sure if the indexed properties and methods will be more performant than the emscripten/wasm2js-style use of a scope closure, as long as the names are bound at compile time. Could try it both ways maybe.
 
 ### Impedence mismatches
 
-64-bit integer `i64` operations are not supported in the AVM2 virtual machine, but binaryen can lower these to 32-bit operations in an existing transformation pass, which will be used here. At the function boundary level, it will be similar to JS legalization in emscripten, with `i64` arguments passed as pairs of (low word, high word) and returned as low word in return value with high word in `getTempRet()`.
+64-bit integer `i64` operations are not supported in the AVM2 virtual machine, but binaryen can lower these to 32-bit operations in an existing transformation pass, which is used here. At the function boundary level, it will be similar to JS legalization in emscripten, with `i64` arguments passed as pairs of (low word, high word) and returned as low word in return value with high word in `getTempRet()`.
 
-`f32` operations are not available either, as with JavaScript it supports 64-bit doubles only. Explicit rounding could be introduced, or it could be approximated.
+`f32` operations are not available either; as with JavaScript it supports 64-bit doubles only. Explicit rounding could be introduced at some performance cost, but for now 32-bit float values are approximated with doubles.
 
-Question: Are unaligned loads and stores supported?
+Question: Are unaligned loads and stores supported? Doesn't indicate not, so hope so.
 
-AVM2 has separate `integer` and `uinteger` types for 32-bit values; we'll use integer primarily and convert when needed?
+AVM2 has separate `int` and `uint` types for 32-bit values; we use integer primarily and convert when needed to perform unsigned operations.
 
-Branches are emitted with byte offsets in the bytecode stream, so need to be translated from labels on the emitter. Labels must be emitted too? At least for backwards branches.
+Branches are emitted with byte offsets in the bytecode stream, so need to be translated from labels on the bytecode emitter. Labels must be emitted too, at least for backwards branches. There may be some improvements left to go in label handling.
 
-### Possible optimizations
+## Binaryen details
+
+binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions. I stand on the shoulders of giants.
+
+Most of the same passes from binaryen's wasm2js tool are used here. The wasm2js 'scratch' helper functions for reinterpret operations are also added manually as imports, which are not yet filled out.
+
+### Optimizations
 
 Patterns to match:
-* increment, decrement opcodes to replace add/subtract by 1/-1
+* increment_i, decrement_i opcodes to replace add/subtract by 1/-1
 * inc_local / dec_local to replace get-inc-set
-* if (a condition-op b) -> if-condition (a, b)
+* if condition -> if-not-condition
+* ??
 
+## Todo
 
+* write bytecode for constructor (imports, memory creation)
+* memory data initializers
+* write bytecode for import stubs (or else call imports as lexical lookups?)
+* write bytecode for the scratch helper functions
+* generate the class and instance for the module
+* complete the bytecode output (up to scripts etc)
+* write some kind of test harness in AS3 + JS + HTML
+* hope things validate
+* bash head against wall
+* don't give up!
