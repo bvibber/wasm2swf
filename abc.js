@@ -389,12 +389,12 @@ class Builder {
         let bits = 32 - Math.clz32(Math.abs(val)) + 1;
         do {
             let byte = val & 127;
+            bits -= 7;
             if (bits > 0) {
                 byte |= 128;
             }
             this.stream.push(byte);
             val >>= 7;
-            bits -= 7;
         } while (bits > 0);
     }
 
@@ -403,12 +403,12 @@ class Builder {
         let bits = 32 - Math.clz32(val);
         do {
             let byte = val & 127;
+            bits -= 7;
             if (bits > 0) {
                 byte |= 128;
             }
             this.stream.push(byte);
             val >>>= 7;
-            bits -= 7;
         } while (bits > 0);
     }
 
