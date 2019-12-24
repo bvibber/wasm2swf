@@ -84,9 +84,8 @@ function avmType(t) {
     switch (t) {
         case binaryen.none: return 'void';
         case binaryen.i32: return 'int';
-        case binaryen.i64: throw new Error('unexpected i64');
-        case binaryen.f32: return 'number';
-        case binaryen.f64: return 'number';
+        case binaryen.f32: return 'Number';
+        case binaryen.f64: return 'Number';
         default: throw new Error('unexpected type ' + t);
     }
 }
@@ -1051,7 +1050,7 @@ function convertFunction(func, file) {
                     builder.pushbyte(0);
                     builder.setlocal(index);
                     break;
-                case 'number':
+                case 'Number':
                     builder.pushdouble(0);
                     builder.setlocal(index);
                     break;
