@@ -211,9 +211,66 @@ class Item {
     }
 }
 
-class TraitsInfo {
-    constructor() {
+class Instance {
+    constructor(info) {
+        this.name        = info.name        || 0;  // string index
+        this.super_name  = info.super_name  || 0;  // string index or 0
+        this.flags       = info.flags       || 0;  // flags
+        this.protectedNs = info.protectedNs || 0;  // optional multiname if flag specifies it
+        this.interfaces  = info.interfaces  || []; // array of multiname indexes
+        this.iinit       = info.iinit       || 0;  // method index for constructor
+        this.traits      = info.traits      || []; // array of Trait objects
+    }
 
+    static ClassSealed = 0x01;
+    static ClassFinal = 0x02;
+    static ClassInterface = 0x04;
+    static ClassProtectedNs = 0x08;
+}
+
+class Trait {
+    constructor(info) {
+        this.kind     = info.kind     || 0;  // const
+        this.data     = info.data     || []; // depends on kind
+        this.metadata = info.metadata || []; // array of metadata indexes
+
+        // for Slot, Const
+        this.slot_id   = info.slot_id   || 0; // slot id (0 is auto)
+        this.type_name = info.type_name || 0; // multiname index
+        this.vindex    = info.vindex    || 0; // Ref to one of the constants, or 0
+        this.vkind     = info.vkind     || 0; // One of the constant pool types
+
+        // for Class
+        this.classi = info.classi || 0; // index to class table
+
+        // for Function
+        this.function = info.function || 0; // index to method table
+
+        // for Method, Getter, Setter
+        this.disp_id = info.disp_id || 0; // compiled-assigned optimization for virtual methods, or 0
+        this.method  = info.method  || 0; /// index to method table
+    }
+
+    // Take one of these
+    static Slot = 0;
+    static Method = 1;
+    static Getter = 2;
+    static Setter = 3;
+    static Class = 4;
+    static Function = 5;
+    static Const = 6;
+
+    // And OR it with one or more of these
+    // for the kind.
+    static Final = 0x10;
+    static Override = 0x20;
+    static Metadata = 0x40;
+}
+
+class Class {
+    constructor(cinit, traits) {
+        this.cinit = cinit; // index into method for static initializer
+        this.traits = traits; // array of Trait objects
     }
 }
 
@@ -450,6 +507,11 @@ class ABCBuilder extends Builder {
         );
     }
 
+    interface(info) {
+        let iface = new Interface(info);
+        return this.abc.interfaces.push(iface) - 1;
+    }
+
     // ----
 
     abcFile(file) {
@@ -485,6 +547,8 @@ class ABCBuilder extends Builder {
         for (let method_body of file.method_bodies) {
             this.method_body_info(method_body);
         }
+
+
     }
 
     cpool_info(cpool) {
@@ -644,7 +708,67 @@ class ABCBuilder extends Builder {
     }
 
     instance_info(inst) {
-        
+        this.u30(inst.name);
+        this.u30(inst.super_name);
+        this.u8(inst.flags);
+        if (inst.flags & Instance.ClassProtectedNs) {
+            this.u30(inst.protectedNs);
+        }
+        this.u30(inst.interfaces.length);
+        for (let iface of inst.interfaces) {
+            this.u30(iface);
+        }
+        this.u30(inst.iinit); // constructor method index
+        this.u30(inst.traits.length);
+        for (let trait of inst.traits) {
+            this.trait_info(trait);
+        }
+    }
+
+    trait_info(trait) {
+        this.u30(trait.name);
+        this.u8(trait.kind);
+        switch (trait.kind & 0x0f) {
+            case Trait.Slot:
+            case Trait.Const:
+                this.u30(trait.slot_id);
+                this.u30(trait.type_name);
+                this.u30(trait.vindex);
+                if (trait.vindex > 0) {
+                    this.u8(trait.vkind);
+                }
+                break;
+            case Trait.Class:
+                this.u30(trait.slot_id);
+                this.u30(trait.classi);
+                break;
+            case Trait.Function:
+                this.u30(trait.slot_id);
+                this.u30(trait.function);
+                break;
+            case Trait.Method:
+            case Trait.Getter:
+            case Trait.Setter:
+                this.u30(trait.disp_id);
+                this.u30(trait.method);
+                break;
+            default:
+                throw new Error('Unexpected trait kind ' + trait.kind);
+        }
+        if (trait.kind & Trait.Metadata) {
+            this.u30(trait.metadata.length);
+            for (let item of trait.metadata) {
+                this.u30(item);
+            }
+        }
+    }
+
+    class_info(aclass) {
+        this.u30(aclass.cinit);
+        this.u30(aclass.traits.length);
+        for (let trait of aclass.traits) {
+            this.u30(trait);
+        }
     }
 }
 
@@ -1307,6 +1431,9 @@ module.exports = {
     Method,
     OptionDetail,
     MethodBody,
+    Metadata,
+    Item,
+    Instance,
 
     ABCBuilder,
 
