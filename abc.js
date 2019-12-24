@@ -20,81 +20,65 @@ class CPool {
         this.strings = [''];
         this.namespaces = [new Namespace(0)]; // '*' namespace...?
         this.ns_sets = [new NamespaceSet([0])];
-        this.multinames = [new QName(0)];
+        this.multinames = [new Multiname({
+            kind: Multiname.Qname,
+            name: 0
+        })];
+    }
+
+    _find(list, val) {
+        // Try for an exact match first:
+        let index = list.indexOf(val);
+
+        // If we created a new object, match its props.
+        if (index === -1 && typeof val === 'object') {
+            return list.findIndex((o) => val.equals(o));
+        }
+
+        return index;
+    }
+
+    _append(list, val) {
+        let index = this._find(list, val);
+        if (index === -1) {
+            index = list.push(val) - 1;
+        }
+        return index;
     }
 
     integer(val) {
-        val = val | 0;
-        let index = this.integers.indexOf(val);
-        if (index >= 0) {
-            return index;
-        } else {
-            return this.integers.push(val) - 1;
-        }
+        return this._append(this.integers, val | 0);
     }
 
     uinteger(val) {
-        val = val >>> 0;
-        let index = this.uintegers.indexOf(val);
-        if (index >= 0) {
-            return index;
-        } else {
-            return this.uintegers.push(val) - 1;
-        }
+        return this._append(this.uintegers, val >>> 0);
     }
 
     double(val) {
-        val = +val;
         if (isNaN(val)) {
             return 0;
         }
-        let index = this.doubles.indexOf(val);
-        if (index >= 0) {
-            return index;
-        } else {
-            return this.doubles.push(val) - 1;
-        }
+        return this._append(this.doubles, +val);
     }
 
     string(str) {
-        str = String(str);
-        if (str === '') {
-            return 0;
-        }
-        let index = this.strings.indexOf(str);
-        if (index >= 0) {
-            return index;
-        } else {
-            return this.strings.push(str) - 1;
-        }
+        return this._append(this.strings, String(str));
     }
 
     namespace(ns) {
-        let index = this.namespaces.findIndex((o) => o.equals(ns));
-        if (index === -1) {
-            index = this.namespaces.push(ns) - 1;
-        }
-        return index;
+        return this._append(this.namespaces, ns);
     }
 
     namespaceSet(ns_set) {
-        let index = this.ns_sets.findIndex((o) => o.equals(ns_set));
-        if (index === -1) {
-            index = this.ns_sets.push(multiname) - 1;
-        }
-        return index;
+        return this._append(this.ns_sets, ns_set);
     }
 
     multiname(multiname) {
-        let index = this.multinames.findIndex((o) => o.equals(multiname));
-        if (index === -1) {
-            index = this.multinames.push(multiname) - 1;
-        }
-        return index;
+        return this._append(this.multinames, multiname);
     }
 }
 
-class NamespaceBase {
+class Namespace {
     // kind is one of the constants
     // name is a reference to the string pool
     constructor(kind, name) {
@@ -114,13 +98,6 @@ class NamespaceBase {
     static StaticProtectedNs = 0x1a;
     static PrivateNs = 0x05;
 }
-
-class Namespace extends NamespaceBase {
-    constructor(name) {
-        super(NamespaceBase.Namespace, name);
-    }
-}
-
 
 class NamespaceSet {
     constructor(ns) {
@@ -143,9 +120,11 @@ class NamespaceSet {
     }
 }
 
-class MultinameBase {
-    constructor(kind) {
-        this.kind = kind;
+class Multiname {
+    constructor(info) {
+        this.kind = info.kind;
+        this.ns = info.ns || 0;
+        this.name = info.ns || 0;
     }
 
     equals(o) {
@@ -162,110 +141,6 @@ class MultinameBase {
     static MultinameA  = 0x0E;
     static MultinameL  = 0x1B;
     static MultinameLA = 0x1C;
-}
-
-class QName extends MultinameBase {
-    constructor(ns, name) {
-        super(MultinameBase.QName);
-        this.ns = ns;
-        this.name = name;
-    }
-
-    equals(o) {
-        return super.equals(o) && this.ns === o.ns && this.name === o.name;
-    }
-}
-
-class QNameA extends MultinameBase {
-    constructor(ns, name) {
-        super(MultinameBase.QNameA);
-        this.ns = ns;
-        this.name = name;
-    }
-
-    equals(o) {
-        return super.equals(o) && this.ns === o.ns && this.name === o.name;
-    }
-}
-
-class RTQName extends MultinameBase {
-    constructor(name) {
-        super(MultinameBase.RTQName);
-        this.name = name;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.name === m.name;
-    }
-}
-
-class RTQNameA extends MultinameBase {
-    constructor(name) {
-        super(MultinameBase.RTQNameA);
-        this.name = name;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.name === m.name;
-    }
-}
-
-class RTQNameL extends MultinameBase {
-    constructor() {
-        super(MultinameBase.RTQNameL);
-    }
-}
-
-class RTQNameLA extends MultinameBase {
-    constructor() {
-        super(MultinameBase.RTQNameLA);
-    }
-}
-
-class Multiname extends MultinameBase {
-    constructor(name, ns_set) {
-        super(MultinameBase.Multiname);
-        this.name = name;
-        this.ns_set = ns_set;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.name === m.name && this.ns_set === m.ns_set;
-    }
-}
-
-class MultinameA extends MultinameBase {
-    constructor(name, ns_set) {
-        super(MultinameBase.MultinameA);
-        this.name = name;
-        this.ns_set = ns_set;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.name === m.name && this.ns_set === m.ns_set;
-    }
-}
-
-class MultinameL extends MultinameBase {
-    constructor(ns_set) {
-        super(MultinameBase.MultinameL);
-        this.ns_set = ns_set;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.ns_set === m.ns_set;
-    }
-}
-
-class MultinameLA extends MultinameBase {
-    constructor(ns_set) {
-        super(MultinameBase.MultinameLA);
-        this.ns_set = ns_set;
-    }
-
-    equals(m) {
-        return super.equals(m) && this.ns_set === m.ns_set;
-    }
 }
 
 class Method {
@@ -460,7 +335,7 @@ class ABCBuilder extends Builder {
     }
 
     namespace(kind, name) {
-        return this.cpool.namespace(new NamespaceBase(
+        return this.cpool.namespace(new Namespace(
             kind,
             this.cpool.string(name)
         ));
@@ -471,27 +346,75 @@ class ABCBuilder extends Builder {
     }
 
     qname(ns, name) {
-        return this.cpool.multiname(new QName(ns, name));
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.QName,
+            ns,
+            name
+        }));
     }
 
     qnameA(ns, name) {
-        return this.cpool.multiname(new QNameA(ns, name));
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.QNameA,
+            ns,
+            name
+        }));
     }
 
     rtqname(name) {
-        return this.cpool.multiname(new RTQName(name));
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.RTQName,
+            name
+        }));
     }
 
     rtqnameA(name) {
-        return this.cpool.multiname(new RTQNameA(name));
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.RTQNameA,
+            name
+        }));
     }
 
     rtqnameL(name) {
-        return this.cpool.multiname(new RTQNameL());
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.RTQNameL
+        }));
     }
 
     rtqnameLA(name) {
-        return this.cpool.multiname(new RTQNameLA());
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.RTQNameLA
+        }));
+    }
+
+    multiname(name, ns_set) {
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.Multiname,
+            name,
+            ns_set
+        }));
+    }
+
+    multinameA(name, ns_set) {
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.MultinameA,
+            name,
+            ns_set
+        }));
+    }
+
+    multinameL(ns_set) {
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.MultinameL,
+            ns_set
+        }));
+    }
+
+    multinameLA(ns_set) {
+        return this.cpool.multiname(new Multiname({
+            kind: Multiname.MultinameLA,
+            ns_set
+        }));
     }
 
     method(info) {
@@ -1372,16 +1295,7 @@ module.exports = {
  
     Namespace,
     NamespaceSet,
-
     Multiname,
-    QName,
-    QNameA,
-    RTQName,
-    RTQNameA,
-    Multiname,
-    MultinameA,
-    MultinameL,
-    MultinameLA,
 
     Method,
     OptionDetail,
