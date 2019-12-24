@@ -274,13 +274,20 @@ class Class {
     }
 }
 
+class Script {
+    constructor(init, traits) {
+        this.init = init; // index into method for body of the script
+        this.traits = traits;
+    }
+}
+
 class ExceptionInfo {
-    constructor() {
-        this.from = 0;
-        this.to = 0;
-        this.target = 0;
-        this.exc_type = 0;
-        this.var_name = 0;
+    constructor(info) {
+        this.from     = info.from || 0; // offset in bytecode array
+        this.to       = info.to   || 0; // offset in bytecode array
+        this.target   = info.target || 0; // offset in bytecode array
+        this.exc_type = info.exc_type || 0; // index to string of exception type, or 0 for any exception
+        this.var_name = info.var_name || 0; // index to string of varname to receive exception, or 0 for none
     }
 }
 
@@ -656,26 +663,6 @@ class ABCBuilder extends Builder {
         }
     }
 
-    method_body_info(body) {
-        this.u30(body.method);
-        this.u30(body.max_stack);
-        this.u30(body.local_count);
-        this.u30(body.init_scope_depth);
-        this.u30(body.max_scope_depth);
-        this.u30(body.code.length);
-        for (let byte of body.code) {
-            this.u8(byte);
-        }
-        this.u30(body.exceptions.length);
-        for (let ex of body.exceptions) {
-            this.exception_info(ex);
-        }
-        this.u30(body.traits.length);
-        for (let trait of body.traits) {
-            this.traits_info(trait);
-        }
-    }
-
     option_info(options) {
         this.u30(options.length);
         for (let option of options) {
@@ -769,6 +756,42 @@ class ABCBuilder extends Builder {
         for (let trait of aclass.traits) {
             this.u30(trait);
         }
+    }
+
+    script_info(script) {
+        this.u30(script.init);
+        this.u30(script.traits.length);
+        for (let trait of script.traits) {
+            this.u30(trait);
+        }
+    }
+
+    method_body_info(body) {
+        this.u30(body.method);
+        this.u30(body.max_stack);
+        this.u30(body.local_count);
+        this.u30(body.init_scope_depth);
+        this.u30(body.max_scope_depth);
+        this.u30(body.code.length);
+        for (let byte of body.code) {
+            this.u8(byte);
+        }
+        this.u30(body.exceptions.length);
+        for (let ex of body.exceptions) {
+            this.exception_info(ex);
+        }
+        this.u30(body.traits.length);
+        for (let trait of body.traits) {
+            this.traits_info(trait);
+        }
+    }
+
+    exception_info(ex) {
+        this.u30(ex.from);
+        this.u30(ex.to);
+        this.u30(ex.target);
+        this.u30(ex.exc_name);
+        this.u30(ex.var_name);
     }
 }
 
