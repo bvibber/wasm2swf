@@ -100,6 +100,7 @@ class Namespace {
 }
 
 class NamespaceSet {
+    // @param {Array<int>} ns
     constructor(ns) {
         this.ns = ns;
     }
@@ -124,11 +125,17 @@ class Multiname {
     constructor(info) {
         this.kind = info.kind;
         this.ns = info.ns || 0;
-        this.name = info.ns || 0;
+        this.name = info.name || 0;
+        this.ns_set = info.ns_set || 0;
     }
 
     equals(o) {
-        return (this === o) || (this.kind === o.kind);
+        return (this === o) || (
+            this.kind === o.kind &&
+            this.ns === o.ns &&
+            this.name === o.name &&
+            this.ns_set === o.ns_set
+        );
     }
 
     static QName       = 0x07;
