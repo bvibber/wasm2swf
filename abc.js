@@ -362,22 +362,27 @@ class Builder {
         return new Uint8Array(this.stream);
     }
 
-    u8(val) {
+    out(val) {
         this.stream.push(val & 255);
+    }
+
+    u8(val) {
+        this.out(val & 255);
     }
 
     u16(val) {
-        this.stream.push(val & 255);
-        this.stream.push((val >> 8) & 255);
+        this.out(val & 255);
+        this.out((val >> 8) & 255);
     }
 
     s24(val) {
-        this.stream.push(val & 255);
-        this.stream.push((val >> 8) & 255);
-        this.stream.push((val >> 16) & 255);
+        this.out(val & 255);
+        this.out((val >> 8) & 255);
+        this.out((val >> 16) & 255);
     }
 
     u30(val) {
+        val >>>= 0;
         if (val >= 2 ** 30) {
             throw new RangeError('too big integer to emit u30');
         }
@@ -385,7 +390,7 @@ class Builder {
     }
 
     s32(val) {
-        val = val | 0;
+        val |= 0;
         let bits = 32 - Math.clz32(Math.abs(val)) + 1;
         do {
             let byte = val & 127;
@@ -393,13 +398,13 @@ class Builder {
             if (bits > 0) {
                 byte |= 128;
             }
-            this.stream.push(byte);
+            this.out(byte);
             val >>= 7;
         } while (bits > 0);
     }
 
     u32(val) {
-        val = val >>> 0;
+        val >>>= 0;
         let bits = 32 - Math.clz32(val);
         do {
             let byte = val & 127;
@@ -407,7 +412,7 @@ class Builder {
             if (bits > 0) {
                 byte |= 128;
             }
-            this.stream.push(byte);
+            this.out(byte);
             val >>>= 7;
         } while (bits > 0);
     }
@@ -415,7 +420,7 @@ class Builder {
     d64(val) {
         floatTemp[0] = val;
         for (let byte of floatTempBytes) {
-            this.stream.push(byte);
+            this.out(byte);
         }
     }
 }
