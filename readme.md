@@ -64,3 +64,37 @@ Patterns to match:
 * hope things validate
 * bash head against wall
 * don't give up!
+
+## Comparisons with FlasCC/CrossBridge
+
+Comparing some old code compiled with CrossBridge, noticed some things there:
+* use of locals is similar. they get initialized to 0 at beginning of function.
+* stack pointer is in an ESP variable in the target namespace scope chain.
+* add/subtract are done with the generic opcodes, then convert_i, rather than using add_i/subtract_i. weird!
+* calls are done with findpropstrict+callprop/callpropvoid, by name reference, not method invocation.
+* function symbols start with F, eg Fmemcpy
+* function args and return values are _not_ mapped directly to function args and return values. what? they appear to be passed through stack memory for args, and variables in a surrounding scope for return values: eax and edx. :D
+
+ESP read:
+
+```
+        getlex          com.brionv.ogvlibs:ESP
+        convert_i
+        setlocal1
+```
+
+ESP write:
+
+```
+        getlocal3
+        findproperty    com.brionv.ogvlibs:ESP
+        swap
+        setproperty     com.brionv.ogvlibs:ESP
+```
+
+Calls:
+
+```
+        findpropstrict  com.brionv.ogvlibs:Fmemcpy
+        callpropvoid    com.brionv.ogvlibs:Fmemcpy (0)
+```
