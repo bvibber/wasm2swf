@@ -1,6 +1,10 @@
+const {
+    Builder
+} = require('./utils');
+
 class ABCFile {
     constructor() {
-        this.minor_version = 19;
+        this.minor_version = 16;
         this.major_version = 46;
         this.constant_pool = new CPool();
         this.methods = [];
@@ -47,14 +51,23 @@ class CPool {
     }
 
     integer(val) {
+        if (typeof val !== 'number') {
+            throw new Error('integer must be a number');
+        }
         return this._append(this.integers, val | 0);
     }
 
     uinteger(val) {
+        if (typeof val !== 'number') {
+            throw new Error('uinteger must be a number');
+        }
         return this._append(this.uintegers, val >>> 0);
     }
 
     double(val) {
+        if (typeof val !== 'number') {
+            throw new Error('double must be a number');
+        }
         if (isNaN(val)) {
             return 0;
         }
@@ -62,18 +75,30 @@ class CPool {
     }
 
     string(str) {
-        return this._append(this.strings, String(str));
+        if (typeof str !== 'string') {
+            throw new Error('string must be a string');
+        }
+        return this._append(this.strings, str);
     }
 
     namespace(ns) {
+        if (!(ns instanceof Namespace)) {
+            throw new Error('namespace must be a Namespace');
+        }
         return this._append(this.namespaces, ns);
     }
 
     namespaceSet(ns_set) {
+        if (!(ns_set instanceof NamespaceSet)) {
+            throw new Error('namespaceSet must be a NamespaceSet');
+        }
         return this._append(this.ns_sets, ns_set);
     }
 
     multiname(multiname) {
+        if (!(multiname instanceof Multiname)) {
+            throw new Error('multiname must be a Multiname');
+        }
         return this._append(this.multinames, multiname);
     }
 }
@@ -295,23 +320,7 @@ const floatTemp = new Float64Array(1);
 const floatTempBytes = new Uint8Array(floatTemp.buffer);
 const utf8 = new TextEncoder();
 
-class Builder {
-    constructor() {
-        this.stream = [];
-    }
-
-    log(...args) {
-        console.log.apply(console, args);
-    }
-
-    toBytes() {
-        return new Uint8Array(this.stream);
-    }
-
-    out(val) {
-        this.stream.push(val & 255);
-    }
-
+class ABCBuilder extends Builder {
     u8(val) {
         this.out(val & 255);
     }
@@ -338,6 +347,9 @@ class Builder {
     s32(val) {
         val |= 0;
         let bits = 32 - Math.clz32(Math.abs(val)) + 1;
+        if (bits > 32) {
+            throw new Error('wtf too many bits');
+        }
         do {
             let byte = val & 127;
             bits -= 7;
@@ -371,7 +383,7 @@ class Builder {
     }
 }
 
-class ABCBuilder extends Builder {
+class ABCFileBuilder extends ABCBuilder {
     constructor() {
         super();
         this.abc = new ABCFile();
@@ -408,7 +420,7 @@ class ABCBuilder extends Builder {
     namespace(kind, name) {
         return this.cpool.namespace(new Namespace(
             kind,
-            this.cpool.string(name)
+            name
         ));
     }
 
@@ -446,13 +458,13 @@ class ABCBuilder extends Builder {
         }));
     }
 
-    rtqnameL(name) {
+    rtqnameL() {
         return this.cpool.multiname(new Multiname({
             kind: Multiname.RTQNameL
         }));
     }
 
-    rtqnameLA(name) {
+    rtqnameLA() {
         return this.cpool.multiname(new Multiname({
             kind: Multiname.RTQNameLA
         }));
@@ -498,25 +510,32 @@ class ABCBuilder extends Builder {
         return this.abc.method_bodies.push(body) - 1;
     }
 
+    /// @param name string id
+    /// @param items array of Item instances
     metadata(name, items) {
-        let cpool = this.abc.constant_pool;
         return new Metadata(
-            cpool.string(name),
+            name,
             items
         );
     }
 
+    /// @param key string id
+    /// @param value string id
     item(key, value) {
-        let cpool = this.abc.constant_pool;
         return new Item(
-            cpool.string(item.key),
-            cpool.string(item.value)
+            key,
+            value
         );
     }
 
     interface(info) {
         let iface = new Interface(info);
         return this.abc.interfaces.push(iface) - 1;
+    }
+
+    script(init, traits) {
+        let script = new Script(init, traits);
+        return this.abc.scripts.push(script) - 1;
     }
 
     // ----
@@ -621,7 +640,7 @@ class ABCBuilder extends Builder {
         switch (multiname.kind) {
             case Multiname.QName:
             case Multiname.QNameA:
-                this.u30(multiname.kind);
+                this.u30(multiname.ns);
                 this.u30(multiname.name);
                 break;
             case Multiname.RTQName:
@@ -646,8 +665,6 @@ class ABCBuilder extends Builder {
     }
 
     method_info(method) {
-        let cpool = this.abc.constant_pool;
-
         this.u30(method.param_types.length);
         this.u30(method.return_type);
         for (let param_type of method.param_types) {
@@ -805,7 +822,7 @@ class Label {
     }
 }
 
-class MethodBuilder extends Builder {
+class MethodBuilder extends ABCBuilder {
     constructor(cpool) {
         super();
         this.cpool = cpool;
@@ -826,14 +843,14 @@ class MethodBuilder extends Builder {
         // Add a placeholder for a relative jump to the future
         this.s24(0);
         this.fixups.push({
-            addr: this.stream.length,
+            addr: this.offset(),
             label
         });
     }
 
     relativeAddress(label) {
         if (this.addresses.has(label)) {
-            let addr = this.stream.length + 3;
+            let addr = this.offset() + 3;
             this.s24(this.addresses.get(label) - addr);
         } else {
             this.fixup(label);
@@ -998,10 +1015,9 @@ class MethodBuilder extends Builder {
     }
 
     getproperty(multiname) {
-        let index = this.cpool.addMultiname(multiname);
-        this.log('getproperty', index);
+        this.log('getproperty', multiname);
         this.u8(0x66);
-        this.u30(index);
+        this.u30(multiname);
     }
 
     getscopeobject(index) {
@@ -1152,7 +1168,7 @@ class MethodBuilder extends Builder {
 
     label(label) {
         this.log('label', label.name);
-        this.addresses.set(label, this.stream.length);
+        this.addresses.set(label, this.offset());
         this.u8(0x09);
     }
 
@@ -1270,7 +1286,7 @@ class MethodBuilder extends Builder {
 
     pushshort(int_value) {
         this.log('pushshort', int_value);
-        this.u8(0x2c);
+        this.u8(0x25);
         this.u30(int_value);
     }
 
@@ -1445,8 +1461,8 @@ class MethodBuilder extends Builder {
 
 module.exports = {
     ABCFile,
+
     CPool,
- 
     Namespace,
     NamespaceSet,
     Multiname,
@@ -1457,9 +1473,11 @@ module.exports = {
     Metadata,
     Item,
     Instance,
-
-    ABCBuilder,
+    Script,
+    Trait,
 
     Label,
     MethodBuilder,
+
+    ABCFileBuilder
 };

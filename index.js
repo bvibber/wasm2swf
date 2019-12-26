@@ -1,6 +1,15 @@
 const fs = require('fs');
 const binaryen = require('binaryen');
-const abc = require('./abc');
+const {
+    ABCFileBuilder,
+    Label,
+    Namespace,
+    Instance,
+    Class,
+    Trait,
+    Script,
+} = require('./abc');
+const {SWFFileBuilder} = require('./swf');
 
 let infile, outfile;
 
@@ -176,7 +185,7 @@ function convertFunction(func, file) {
     const callbacks = {
         visitBlock: (info) => {
             let name = info.name || 'block' + labelIndex++;
-            let label = new abc.Label(name);
+            let label = new Label(name);
             labelStack.push(label);
             info.children.forEach(traverse);
             builder.label(label);
@@ -185,7 +194,7 @@ function convertFunction(func, file) {
 
         visitIf: (info) => {
             let cond = binaryen.getExpressionInfo(info.condition);
-            let ifend = new abc.Label();
+            let ifend = new Label();
             if (cond.id == binaryen.BinaryId) {
                 switch(cond.op) {
                     case binaryen.EqInt32:
@@ -281,7 +290,7 @@ function convertFunction(func, file) {
             traverse(info.ifTrue);
             builder.label(ifend);
             if (info.ifFalse) {
-                let elseend = new abc.Label();
+                let elseend = new Label();
                 builder.jump(elseend);
                 traverse(info.ifFalse);
                 builder.label(elseend);
@@ -289,7 +298,7 @@ function convertFunction(func, file) {
         },
     
         visitLoop: (info) => {
-            let start = new abc.Label(info.name);
+            let start = new Label(info.name);
             labelStack.push(start);
             builder.label(start);
             traverse(info.body);
@@ -363,8 +372,8 @@ function convertFunction(func, file) {
             builder.getslot(tableSlot);
             traverse(info.target);
             info.operands.forEach(traverse);
-            //let runtime = new abc.RuntimeMultiname(); // @FIXME call indirect is broken for now
-            let runtime = 1;
+            //let runtime = new RuntimeMultiname(); // @FIXME call indirect is broken for now
+            let runtime = builder.rtqnameL();
             builder.callproperty(runtime, info.operands.length);
             switch (info.type) {
                 case binaryen.none:
@@ -970,7 +979,7 @@ function convertFunction(func, file) {
             traverse(info.ifTrue);
             traverse(info.ifFalse);
             traverse(info.condition);
-            let label = new abc.Label();
+            let label = new Label();
             builder.iftrue(label);
             builder.swap();
             builder.label(label);
@@ -1075,11 +1084,11 @@ function convertFunction(func, file) {
         console.log('import from: ' + info.module + '.' + info.base);
     }
 
-    const globalns = file.namespace('');
+    const globalns = file.namespace(Namespace.Namespace, file.string(''));
     const method = file.method({
         name: file.string(info.name),
-        return_type: file.qname(globalns, resultType),
-        param_types: argTypes.map((type) => file.qname(globalns, type)),
+        return_type: file.qname(globalns, file.string(resultType)),
+        param_types: argTypes.map((type) => file.qname(globalns, file.string(type))),
     });
 
     const body = file.methodBody({
@@ -1094,7 +1103,7 @@ function convertFunction(func, file) {
 }
 
 function convertModule(mod) {
-    const abcBuilder = new abc.ABCBuilder();
+    const abc = new ABCFileBuilder();
     let type_v = binaryen.createType([]);
     let type_j = binaryen.createType([binaryen.i64]);
     let type_i = binaryen.createType([binaryen.i32]);
@@ -1187,13 +1196,51 @@ function convertModule(mod) {
 
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
-        convertFunction(func, abcBuilder);
+        convertFunction(func, abc);
     }
 
-    let bytes = abcBuilder.toBytes();
+    const globalns = abc.namespace(Namespace.Namespace, abc.string(''));
+    const init = abc.method({
+        name: abc.string('wasm2swf_init'),
+        return_type: abc.qname(globalns, abc.string('void')),
+        param_types: [],
+    });
+    abc.methodBody({
+        method: init,
+        local_count: 1,
+        code: [] // add stuff
+    });
+
+    let traits = []; // fill with the methods and props
+    abc.script(init, traits);
+
+    let bytes = abc.toBytes();
     console.log(`\n\n${bytes.length} bytes of abc`);
 
     return bytes;
+}
+
+
+function generateSWF(symbols, bytecode) {
+    let swf = new SWFFileBuilder();
+
+    swf.header({
+        width: 10000,
+        height: 7500,
+        framerate: 24,
+    });
+
+    swf.fileAttributes({
+        actionScript3: true,
+        useNetwork: true,
+    });
+
+    swf.frameLabel('frame1');
+    swf.doABC('frame1', bytecode);
+    swf.symbolClass(symbols);
+    swf.showFrame();
+
+    return swf.toBytes();
 }
 
 let wasm = fs.readFileSync(infile);
@@ -1201,3 +1248,7 @@ let mod = binaryen.readBinary(wasm);
 let bytes = convertModule(mod);
 
 fs.writeFileSync('output.abc', bytes);
+
+let swf = generateSWF(['output'], bytes);
+
+fs.writeFileSync('output.swf', swf);
