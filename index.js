@@ -158,7 +158,7 @@ function walkExpression(expr, callbacks) {
 }
 
 function convertFunction(func, abc, instanceTraits) {
-    let pubns = abc.namespace(Namespace.PackageNamespace);
+    let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
 
     const builder = abc.methodBuilder();
     let labelIndex = 0;
@@ -1122,7 +1122,7 @@ function convertFunction(func, abc, instanceTraits) {
 
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
-    let pubns = abc.namespace(Namespace.PackageNamespace);
+    let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
     let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
     let privatens = abc.namespace(Namespace.PrivateNs);
     let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));

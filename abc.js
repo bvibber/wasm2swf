@@ -21,12 +21,12 @@ class CPool {
         this.integers = [0];
         this.uintegers = [0];
         this.doubles = [NaN];
-        this.strings = [''];
-        this.namespaces = [new Namespace(0)]; // '*' namespace...?
-        this.ns_sets = [new NamespaceSet([0])];
+        this.strings = [undefined]; // placeholder for '' or '*' in namespace constants
+        this.namespaces = [new Namespace(-1)]; // placeholder for '*' namespace
+        this.ns_sets = [new NamespaceSet([-1])];
         this.multinames = [new Multiname({
-            kind: Multiname.Qname,
-            name: 0
+            kind: -1,
+            name: -1
         })];
     }
 
