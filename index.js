@@ -119,12 +119,13 @@ const globalSlots = {};
 
 const methods = [];
 const methodIndexes = {};
+const imports = [];
 
-function slotForGlobal(name, type) {
+function addSlot(name, type) {
     if (globalSlots[name] === undefined) {
         globalSlots[name] = slots.push({
             name,
-            type: avmType(type)
+            type
         }) - 1;
     }
     return globalSlots[name];
@@ -157,6 +158,8 @@ function walkExpression(expr, callbacks) {
 }
 
 function convertFunction(func, abc, instanceTraits) {
+    let pubns = abc.namespace(Namespace.Namespace, abc.string(''));
+
     const builder = abc.methodBuilder();
     let labelIndex = 0;
     let labelStack = [];
@@ -424,14 +427,16 @@ function convertFunction(func, abc, instanceTraits) {
 
         visitGlobalGet: (info) => {
             builder.getlocal_0(); // 'this' param
-            let index = slotForGlobal(info.name, info.type);
+            let index = addSlot('global$' + info.name,
+                abc.qname(pubns, avmType(info.type)));
             builder.getslot(index);
         },
 
         visitGlobalSet: (info) => {
             builder.getlocal_0(); // 'this' param
             traverse(info.value);
-            let index = slotForGlobal(info.name, info.type);
+            let index = addSlot('global$' + info.name,
+                abc.qname(pubns, avmType(info.type)));
             builder.setslot(index);
         },
 
@@ -1069,15 +1074,30 @@ function convertFunction(func, abc, instanceTraits) {
     } else {
         // Import function.
         console.log('import from: ' + info.module + '.' + info.base);
+        let slot = addSlot('import$' + info.module + '$' + info.base,
+            abc.qname(pubns, 'Function')
+        );
+        imports.push(info);
+        builder.getlocal_0();
+        builder.getslot(slot);
+        builder.pushnull();
+        for (let index = 0; index < argTypes.length; index++) {
+            builder.getlocal(index + 1);
+        }
+        builder.call(argTypes.length);
+        if (info.results == binaryen.none) {
+            builder.pop();
+            builder.returnvoid();
+        } else {
+            // it will be coerced to the correct type
+            builder.returnvalue();
+        }
     }
 
-    let globalns = abc.namespace(Namespace.Namespace, abc.string(''));
-    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
-    let privatens = abc.namespace(Namespace.PrivateNs, abc.string('wasm2swf'));
     let method = abc.method({
         name: abc.string(info.name),
-        return_type: abc.qname(globalns, abc.string(resultType)),
-        param_types: argTypes.map((type) => abc.qname(globalns, abc.string(type))),
+        return_type: abc.qname(pubns, abc.string(resultType)),
+        param_types: argTypes.map((type) => abc.qname(pubns, abc.string(type))),
     });
 
     let body = abc.methodBody({
@@ -1088,7 +1108,7 @@ function convertFunction(func, abc, instanceTraits) {
 
     instanceTraits.push(abc.trait({
         //name: abc.qname(privatens, abc.string(info.name)),
-        name: abc.qname(globalns, abc.string(info.name)),
+        name: abc.qname(pubns, abc.string(info.name)),
         kind: Trait.Method,
         disp_id: method, // compiler-assigned, so use the same one
         method
@@ -1102,6 +1122,11 @@ function convertFunction(func, abc, instanceTraits) {
 
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
+    let pubns = abc.namespace(Namespace.Namespace, abc.string(''));
+    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
+    let privatens = abc.namespace(Namespace.PrivateNs, abc.string('wasm2swf'));
+    let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));
+
     let type_v = binaryen.createType([]);
     let type_j = binaryen.createType([binaryen.i64]);
     let type_i = binaryen.createType([binaryen.i32]);
@@ -1185,12 +1210,6 @@ function convertModule(mod) {
         'remove-unused-module-elements',
     ]);
 
-    for (let i = 0; i < mod.getNumExports(); i++) {
-        let ex = mod.getExportByIndex(i);
-        let info = binaryen.getExportInfo(ex);
-        console.log('export', info);
-    }
-
     // First assign slot indexes 
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
@@ -1211,13 +1230,10 @@ function convertModule(mod) {
         convertFunction(func, abc, instanceTraits);
     }
 
-    let globalns = abc.namespace(Namespace.Namespace, abc.string(''));
-    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
-
     // Class static initializer
     let cinit = abc.method({
         name: abc.string('wasm2swf_cinit'),
-        return_type: abc.qname(globalns, abc.string('void')),
+        return_type: abc.qname(pubns, abc.string('void')),
         param_types: [],
     });
     let cinitBody = abc.methodBuilder();
@@ -1232,23 +1248,87 @@ function convertModule(mod) {
     // Instance constructor
     let iinit = abc.method({
         name: abc.string('wasm2swf_iinit'),
-        return_type: abc.qname(globalns, abc.string('void')),
-        param_types: [abc.qname(globalns, abc.string('Array'))],
+        return_type: abc.qname(pubns, abc.string('void')),
+        param_types: [abc.qname(pubns, abc.string('Array'))],
     });
+
     let iinitBody = abc.methodBuilder();
     iinitBody.getlocal_0();
     iinitBody.constructsuper(0);
-    // @fixme initialize the memory and import slots
+
+    // Initialize the memory
+    iinitBody.getlocal_0();
+    iinitBody.getlex(abc.qname(flashutilsns, abc.string('ByteArray')));
+    iinitBody.construct(0);
+    iinitBody.dup();
+    iinitBody.pushstring(abc.string('littleEndian'));
+    iinitBody.setproperty(abc.qname(pubns, abc.string('endian')));
+    iinitBody.dup();
+    iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
+    iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
+    iinitBody.setslot(addSlot('wasm2swf_memory',
+        abc.qname(flashutilsns, abc.string('ByteArray'))
+    ));
+
+    // Initialize the table
+    iinitBody.getlocal_0();
+    iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
+    iinitBody.construct(0);
+    // @fixme implement the initializer segments
+    // needs accessors added to binaryen.js
+    iinitBody.setslot(addSlot('wasm2swf_table',
+        abc.qname(flashutilsns, abc.string('ByteArray'))
+    ));
+
+    // Initialize the import function slots
+    for (let info of imports) {
+        iinitBody.getlocal_1();
+        console.log(info);  
+        iinitBody.getproperty(abc.qname(pubns, abc.string(info.module)));
+        iinitBody.getproperty(abc.qname(pubns, abc.string(info.base)));
+        iinitBody.setslot(addSlot(
+            'import$' + info.module + '$' + info.base,
+            abc.qname(pubns, abc.string('Function'))
+        ));
+    }
+
+    // Initialize the export object
+    iinitBody.getlocal_0();
+    iinitBody.getlex(abc.qname(pubns, abc.string('Object')));
+    iinitBody.construct(0);
+    for (let i = 0; i < mod.getNumExports(); i++) {
+        let ex = mod.getExportByIndex(i);
+        let info = binaryen.getExportInfo(ex);
+        console.log('export', info);
+        switch (info.kind) {
+            case binaryen.ExternalFunction: {
+                iinitBody.dup(); // 'exports' object
+                iinitBody.getlocal_0(); // 'this'
+                iinitBody.getproperty(abc.qname(pubns, abc.string(info.value)));
+                iinitBody.setproperty(abc.qname(pubns, abc.string(info.name)));
+                break;
+            }
+            default: {
+                // ignore for now
+            }
+        }
+    }
+    iinitBody.setslot(addSlot('exports',
+        abc.qname(pubns, abc.string('Object'))
+    ));
+
+
     iinitBody.returnvoid;
     abc.methodBody({
         method: iinit,
         local_count: 1,
         code: iinitBody.toBytes()
     })
+
     // @fixme maybe add class and instance data in the same call?
     let inst = abc.instance({
         name: abc.qname(wasmns, abc.string('Instance')), // @todo make the namespace specifiable
-        super_name: abc.qname(globalns, abc.string('Object')),
+        super_name: abc.qname(pubns, abc.string('Object')),
         flags: 0,
         iinit,
         traits: instanceTraits,
@@ -1257,8 +1337,8 @@ function convertModule(mod) {
     // Script initializer
     const init = abc.method({
         name: abc.string('wasm2swf_init'),
-        return_type: abc.qname(globalns, abc.string('void')),
-        param_types: [abc.qname(globalns, abc.string('Object'))],
+        return_type: abc.qname(pubns, abc.string('void')),
+        param_types: [abc.qname(pubns, abc.string('Object'))],
     });
     let initBody = abc.methodBuilder();
     initBody.returnvoid();

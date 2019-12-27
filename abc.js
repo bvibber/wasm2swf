@@ -943,6 +943,12 @@ class MethodBuilder extends ABCBuilder {
         this.u30(arg_count);
     }
 
+    construct(arg_count) {
+        this.log('construct', arg_count);
+        this.u8(0x42);
+        this.u30(arg_count);
+    }
+
     constructsuper() {
         this.log('constructsuper');
         this.u8(0x49);
@@ -998,6 +1004,12 @@ class MethodBuilder extends ABCBuilder {
     equals() {
         this.log('equals');
         this.u8(0xab);
+    }
+
+    getlex(index) {
+        this.log('getlex', index);
+        this.u8(0x60);
+        this.u30(index);
     }
 
     getlocal(index) {
@@ -1309,6 +1321,12 @@ class MethodBuilder extends ABCBuilder {
         this.u30(int_value);
     }
 
+    pushstring(index) {
+        this.log('pushstring', index);
+        this.u8(0x2c);
+        this.u30(index);
+    }
+
     pushtrue() {
         this.log('pushtrue');
         this.u8(0x26);
@@ -1372,6 +1390,12 @@ class MethodBuilder extends ABCBuilder {
     setlocal_3() {
         this.log('setlocal_3');
         this.u8(0xd7);
+    }
+
+    setproperty(index) {
+        this.log('setproperty', index);
+        this.u8(0x61);
+        this.u30(index);
     }
 
     setslot(slotindex) {
