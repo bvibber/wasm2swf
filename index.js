@@ -169,8 +169,8 @@ function walkExpression(expr, callbacks) {
     }
 }
 
-function convertFunction(func, file) {
-    const builder = file.methodBuilder();
+function convertFunction(func, abc, instanceTraits) {
+    const builder = abc.methodBuilder();
     let labelIndex = 0;
     let labelStack = [];
 
@@ -1084,22 +1084,31 @@ function convertFunction(func, file) {
         console.log('import from: ' + info.module + '.' + info.base);
     }
 
-    const globalns = file.namespace(Namespace.Namespace, file.string(''));
-    const method = file.method({
-        name: file.string(info.name),
-        return_type: file.qname(globalns, file.string(resultType)),
-        param_types: argTypes.map((type) => file.qname(globalns, file.string(type))),
+    const globalns = abc.namespace(Namespace.Namespace, abc.string(''));
+    const privatens = abc.namespace(Namespace.PrivateNs, abc.string('wasm2swf'));
+    const method = abc.method({
+        name: abc.string(info.name),
+        return_type: abc.qname(globalns, abc.string(resultType)),
+        param_types: argTypes.map((type) => abc.qname(globalns, abc.string(type))),
     });
 
-    const body = file.methodBody({
+    const body = abc.methodBody({
         method,
         local_count: localTypes.length + 1,
         code: builder.toBytes()
     });
 
+    instanceTraits.push(abc.trait({
+        name: abc.qname(privatens, abc.string(info.name)),
+        kind: Trait.Method | Trait.Final,
+        disp_id: method, // compiler-assigned, so use the same one
+        method
+    }));
+
     console.log('}');
 
     // @fixme we must also add it to the class
+
 }
 
 function convertModule(mod) {
@@ -1194,24 +1203,75 @@ function convertModule(mod) {
         console.log('method', index, name);
     }
 
+    let classTraits = [];
+    let instanceTraits = [];
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
-        convertFunction(func, abc);
+        convertFunction(func, abc, instanceTraits);
     }
 
-    const globalns = abc.namespace(Namespace.Namespace, abc.string(''));
-    const init = abc.method({
-        name: abc.string('wasm2swf_init'),
+    let globalns = abc.namespace(Namespace.Namespace, abc.string(''));
+    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
+
+    // Class static initializer
+    let cinit = abc.method({
+        name: abc.string('wasm2swf_cinit'),
         return_type: abc.qname(globalns, abc.string('void')),
         param_types: [],
     });
+    let cinitBody = abc.methodBuilder();
+    abc.methodBody({
+        method: cinit,
+        local_count: 2,
+        code: cinitBody.toBytes()
+    });
+    let classi = abc.addClass(cinit, classTraits);
+
+    // Instance constructor
+    let iinit = abc.method({
+        name: abc.string('wasm2swf_iinit'),
+        return_type: abc.qname(globalns, 'wasm2swf'),
+        param_types: [abc.qname(globalns, 'Array')],
+    });
+    let iinitBody = abc.methodBuilder();
+    iinitBody.getlocal_0();
+    iinitBody.constructsuper(0);
+    // @fixme initialize the memory and import slots
+    iinitBody.returnvoid;
+    abc.methodBody({
+        method: iinit,
+        local_count: 2,
+        code: iinitBody.toBytes()
+    })
+    // @fixme maybe add class and instance data in the same call?
+    let inst = abc.instance({
+        name: abc.qname(globalns, 'wasm2swf'), // @todo make the namespace specifiable
+        super_name: abc.qname(globalns, 'Object'),
+        flags: 0,
+        iinit,
+        traits: instanceTraits,
+    });
+
+    // Script initializer
+    const init = abc.method({
+        name: abc.string('wasm2swf_init'),
+        return_type: abc.qname(globalns, abc.string('void')),
+        param_types: [abc.qname(globalns, abc.string('Object'))],
+    });
+    let initBody = abc.methodBuilder();
+    initBody.returnvoid();
     abc.methodBody({
         method: init,
         local_count: 1,
-        code: [] // add stuff
+        code: initBody.toBytes(),
     });
-
-    let traits = []; // fill with the methods and props
+    let traits = [];
+    traits.push(abc.trait({
+        name: abc.qname(wasmns, abc.string('Instance')),
+        kind: Trait.Class,
+        slot_id: 1,
+        classi: classi,
+    }));
     abc.script(init, traits);
 
     let bytes = abc.toBytes();

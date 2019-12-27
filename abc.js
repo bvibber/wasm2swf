@@ -533,9 +533,24 @@ class ABCFileBuilder extends ABCBuilder {
         return this.abc.interfaces.push(iface) - 1;
     }
 
+    addClass(cinit, traits) {
+        let classObj = new Class(cinit, traits);
+        return this.abc.classes.push(classObj) - 1;
+    }
+
+    instance(info) {
+        let inst = new Instance(info);
+        return this.abc.instances.push(inst) - 1;
+    }
+
     script(init, traits) {
         let script = new Script(init, traits);
         return this.abc.scripts.push(script) - 1;
+    }
+
+    trait(info) {
+        let trait = new Trait(info);
+        return trait;
     }
 
     // ----
@@ -927,6 +942,11 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x4c);
         this.u30(index); // a multiname index
         this.u30(arg_count);
+    }
+
+    constructsuper() {
+        this.log('constructsuper');
+        this.u8(0x49);
     }
 
     convert_i() {
