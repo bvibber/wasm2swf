@@ -416,7 +416,7 @@ class ABCFileBuilder extends ABCBuilder {
         return this.cpool.string(val);
     }
 
-    namespace(kind, name) {
+    namespace(kind, name=0) {
         return this.cpool.namespace(new Namespace(
             kind,
             name
