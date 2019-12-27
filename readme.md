@@ -42,22 +42,26 @@ Branches are emitted with byte offsets in the bytecode stream, so need to be tra
 
 ## Binaryen details
 
-binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions. I stand on the shoulders of giants.
+binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions so they can be transformed to ActionScript bytecode ops. I stand on the shoulders of giants.
 
 Most of the same passes from binaryen's wasm2js tool are used here. The wasm2js 'scratch' helper functions for reinterpret operations are also added manually as imports, which are not yet filled out.
+
+Some additional transformations are made during the tree walk/translation phase within wasm2swf.
 
 ### Optimizations
 
 Patterns to match:
 * increment_i, decrement_i opcodes to replace add/subtract by 1/-1
 * inc_local / dec_local to replace get-inc-set
-* if condition -> if-not-condition
+* if + condition -> if-not-condition
 * ??
 
 ## Todo
 
-* write full bytecode for constructor (imports, memory creation)
-* memory data initializers
+* write full bytecode for constructor
+    * set the application domain memory
+    * memory data segments
+    * function table segments (needs upstream work in binaryen's C and JS APIs)
 * write bytecode for import stubs (or else call imports as lexical lookups?)
 * write bytecode for the scratch helper functions
 * export the class for the module
@@ -99,3 +103,12 @@ Calls:
         findpropstrict  com.brionv.ogvlibs:Fmemcpy
         callpropvoid    com.brionv.ogvlibs:Fmemcpy (0)
 ```
+
+## ActionScript API
+
+The intent is to provide a similar API to WebAssembly's JS API,
+but with precompiled modules that can be used to instantiate from rather than taking ArrayBuffers or input streams.
+
+Have not yet decided if it's necessary to mess around with sharing an application domain with a linked app, or if it's best to use Loader to separate stuff.
+
+
