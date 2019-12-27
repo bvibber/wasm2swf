@@ -255,6 +255,7 @@ class Instance {
 
 class Trait {
     constructor(info) {
+        this.name     = info.name     || 0;  // string ref
         this.kind     = info.kind     || 0;  // const
         this.metadata = info.metadata || []; // array of metadata indexes
 
@@ -739,11 +740,11 @@ class ABCFileBuilder extends ABCBuilder {
         this.u30(inst.iinit); // constructor method index
         this.u30(inst.traits.length);
         for (let trait of inst.traits) {
-            this.trait_info(trait);
+            this.traits_info(trait);
         }
     }
 
-    trait_info(trait) {
+    traits_info(trait) {
         this.u30(trait.name);
         this.u8(trait.kind);
         switch (trait.kind & 0x0f) {

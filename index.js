@@ -159,6 +159,7 @@ function walkExpression(expr, callbacks) {
 
 function convertFunction(func, abc, instanceTraits) {
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
+    let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
 
     const builder = abc.methodBuilder();
     let labelIndex = 0;
@@ -1107,8 +1108,8 @@ function convertFunction(func, abc, instanceTraits) {
     });
 
     instanceTraits.push(abc.trait({
-        //name: abc.qname(privatens, abc.string(info.name)),
-        name: abc.qname(pubns, abc.string(info.name)),
+        name: abc.qname(privatens, abc.string('func$' + info.name)),
+        //name: abc.qname(pubns, abc.string(info.name)),
         kind: Trait.Method,
         disp_id: method, // compiler-assigned, so use the same one
         method
@@ -1124,7 +1125,7 @@ function convertModule(mod) {
     const abc = new ABCFileBuilder();
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
     let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
-    let privatens = abc.namespace(Namespace.PrivateNs);
+    let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
     let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));
 
     let type_v = binaryen.createType([]);
@@ -1303,8 +1304,8 @@ function convertModule(mod) {
         switch (info.kind) {
             case binaryen.ExternalFunction: {
                 iinitBody.dup(); // 'exports' object
-                iinitBody.getlocal_0(); // 'this'
-                iinitBody.getproperty(abc.qname(pubns, abc.string(info.value)));
+                iinitBody.getlocal_0(); // 'imports'
+                iinitBody.getproperty(abc.qname(privatens, abc.string('func$' + info.value)));
                 iinitBody.setproperty(abc.qname(pubns, abc.string(info.name)));
                 break;
             }
