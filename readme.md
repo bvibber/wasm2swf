@@ -2,6 +2,8 @@
 
 A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
+'''`wasm2swf` is a work in progress and doesn't quite produce valid output yet.'''
+
 ## What?
 
 This aims to be a tool that compiles standalone WebAssembly modules (`.wasm`) into ActionScript bytecode (`.abc`) files implementing a class which can be loaded and used by ActionScript 3 code in a Flash "movie" (`.swf`).

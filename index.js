@@ -1313,6 +1313,6 @@ let bytes = convertModule(mod);
 
 fs.writeFileSync('output.abc', bytes);
 
-let swf = generateSWF(['output'], bytes);
+let swf = generateSWF(['WebAssembly.Instance'], bytes);
 
 fs.writeFileSync('output.swf', swf);
