@@ -101,15 +101,15 @@ function avmType(t) {
 
 const slots = [
     {
-        name: '__wasm2swf_reserved',
+        name: 'wasm2swf_reserved',
         type: 'undefined',
     },
     {
-        name: '__wasm2swf_memory',
+        name: 'wasm2swf_memory',
         type: 'ByteArray',
     },
     {
-        name: '__wasm2swf_table',
+        name: 'wasm2swf_table',
         type: 'Array',
     }
 ];
@@ -117,7 +117,7 @@ const memorySlot = 1;
 const tableSlot = 2;
 const globalSlots = {};
 
-const methods = ['__wasm2swf_reserved'];
+const methods = [];
 const methodIndexes = {};
 
 function slotForGlobal(name, type) {
@@ -131,29 +131,16 @@ function slotForGlobal(name, type) {
 }
 
 function addMethod(name) {
-    methodIndexes[name] = (methods.push(name) - 1);
+    return methodIndexes[name] = (methods.push(name) - 1);
 }
 
 function methodIndex(name) {
-    if (methodIndexes[name]) {
+    if (methodIndexes[name] !== undefined) {
         return methodIndexes[name];
     } else {
         throw new Error('Unknown function ' + name);
     }
 }
-
-addMethod('__wasm2swf_memory_size');
-addMethod('__wasm2swf_memory_grow');
-
-addMethod('__wasm2swf_clz32');
-
-addMethod('__wasm2swf_abs');
-addMethod('__wasm2swf_ceil');
-addMethod('__wasm2swf_floor');
-addMethod('__wasm2swf_sqrt');
-
-addMethod('__wasm2swf_min');
-addMethod('__wasm2swf_max');
 
 function walkExpression(expr, callbacks) {
     let info = binaryen.getExpressionInfo(expr);
@@ -572,7 +559,7 @@ function convertFunction(func, abc, instanceTraits) {
                 // int
                 case binaryen.ClzInt32:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_clz32');
+                    index = methodIndex('wasm2swf_clz32');
                     traverse(info.value);
                     builder.callmethod(index, 1);
                     builder.convert_i();
@@ -591,21 +578,21 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.AbsFloat32:
                 case binaryen.AbsFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_abs');
+                    index = methodIndex('wasm2swf_abs');
                     traverse(info.value);
                     builder.callmethod(index, 1);
                     break;
                 case binaryen.CeilFloat32:
                 case binaryen.CeilFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_ceil');
+                    index = methodIndex('wasm2swf_ceil');
                     traverse(info.value);
                     builder.callmethod(index, 1);
                     break;
                 case binaryen.FloorFloat32:
                 case binaryen.FloorFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_floor');
+                    index = methodIndex('wasm2swf_floor');
                     traverse(info.value);
                     builder.callmethod(index, 1);
                     break;
@@ -620,7 +607,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.SqrtFloat32:
                 case binaryen.SqrtFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_sqrt');
+                    index = methodIndex('wasm2swf_sqrt');
                     traverse(info.value);
                     builder.callmethod(index, 1);
                     break;
@@ -910,7 +897,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.MinFloat32:
                 case binaryen.MinFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_min');
+                    index = methodIndex('wasm2swf_min');
                     traverse(info.left);
                     traverse(info.right);
                     builder.callmethod(index, 2);
@@ -918,7 +905,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.MaxFloat32:
                 case binaryen.MaxFloat64:
                     builder.getlocal_0(); // 'this'
-                    index = methodIndex('__wasm2swf_max');
+                    index = methodIndex('wasm2swf_max');
                     traverse(info.left);
                     traverse(info.right);
                     builder.callmethod(index, 2);
@@ -1002,14 +989,14 @@ function convertFunction(func, abc, instanceTraits) {
         visitHost: (info) => {
             switch (info.op) {
                 case binaryen.MemoryGrow:
-                    index = methodIndex('__wasm2swf_memory_grow');
+                    index = methodIndex('wasm2swf_memory_grow');
                     builder.getlocal_0(); // 'this'
                     traverse(info.operands[0]);
                     builder.callmethod(index, 1);
                     builder.convert_i();
                     break;
                 case binaryen.MemorySize:
-                    index = methodIndex('__wasm2swf_memory_size');
+                    index = methodIndex('wasm2swf_memory_size');
                     builder.getlocal_0(); // 'this'
                     builder.callmethod(index, 0);
                     builder.convert_i();
@@ -1084,23 +1071,25 @@ function convertFunction(func, abc, instanceTraits) {
         console.log('import from: ' + info.module + '.' + info.base);
     }
 
-    const globalns = abc.namespace(Namespace.Namespace, abc.string(''));
-    const privatens = abc.namespace(Namespace.PrivateNs, abc.string('wasm2swf'));
-    const method = abc.method({
+    let globalns = abc.namespace(Namespace.Namespace, abc.string(''));
+    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
+    let privatens = abc.namespace(Namespace.PrivateNs, abc.string('wasm2swf'));
+    let method = abc.method({
         name: abc.string(info.name),
         return_type: abc.qname(globalns, abc.string(resultType)),
         param_types: argTypes.map((type) => abc.qname(globalns, abc.string(type))),
     });
 
-    const body = abc.methodBody({
+    let body = abc.methodBody({
         method,
         local_count: localTypes.length + 1,
         code: builder.toBytes()
     });
 
     instanceTraits.push(abc.trait({
-        name: abc.qname(privatens, abc.string(info.name)),
-        kind: Trait.Method | Trait.Final,
+        //name: abc.qname(privatens, abc.string(info.name)),
+        name: abc.qname(globalns, abc.string(info.name)),
+        kind: Trait.Method,
         disp_id: method, // compiler-assigned, so use the same one
         method
     }));
@@ -1118,27 +1107,39 @@ function convertModule(mod) {
     let type_i = binaryen.createType([binaryen.i32]);
     let type_f = binaryen.createType([binaryen.f32]);
     let type_d = binaryen.createType([binaryen.f64]);
+    let type_dd = binaryen.createType([binaryen.f64, binaryen.f64]);
 
-    function addScratch(store, load, params, ret) {
+    function addImport(name, params, ret) {
         mod.addFunctionImport(
-            store,
+            name,
             'env',
-            store,
+            name,
             params,
-            binaryen.void
-        );
-        mod.addFunctionImport(
-            load,
-            'env',
-            load,
-            type_v,
             ret
         );
         // hack to keep them alive
         // may be better to do differently?
-        mod.addFunctionExport(store, store);
-        mod.addFunctionExport(load, load);
+        mod.addFunctionExport(name, name);
     }
+
+    function addScratch(store, load, params, ret) {
+        addImport(store, params, binaryen.void);
+        addImport(load, type_v, ret);
+    }
+
+    addImport('wasm2swf_memory_size', type_v, binaryen.i32);
+    addImport('wasm2swf_memory_grow', type_i, binaryen.i32);
+
+    addImport('wasm2swf_clz32', type_i, binaryen.i32);
+
+    addImport('wasm2swf_abs', type_d, binaryen.f64);
+    addImport('wasm2swf_ceil', type_d, binaryen.f64);
+    addImport('wasm2swf_floor', type_d, binaryen.f64);
+    addImport('wasm2swf_sqrt', type_d, binaryen.f64);
+
+    addImport('wasm2swf_min', type_dd, binaryen.f64);
+    addImport('wasm2swf_max', type_dd, binaryen.f64);
+
     addScratch(
         'wasm2js_scratch_store_i32',
         'wasm2js_scratch_load_i32',
@@ -1194,7 +1195,7 @@ function convertModule(mod) {
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
         let info = binaryen.getFunctionInfo(func);
-        let index = methods.push(info.name) - 1;
+        let index = addMethod(info.name);
         methodIndexes[info.name] = index;
     }
 
@@ -1220,6 +1221,7 @@ function convertModule(mod) {
         param_types: [],
     });
     let cinitBody = abc.methodBuilder();
+    cinitBody.returnvoid();
     abc.methodBody({
         method: cinit,
         local_count: 2,
@@ -1230,8 +1232,8 @@ function convertModule(mod) {
     // Instance constructor
     let iinit = abc.method({
         name: abc.string('wasm2swf_iinit'),
-        return_type: abc.qname(globalns, 'wasm2swf'),
-        param_types: [abc.qname(globalns, 'Array')],
+        return_type: abc.qname(globalns, abc.string('void')),
+        param_types: [abc.qname(globalns, abc.string('Array'))],
     });
     let iinitBody = abc.methodBuilder();
     iinitBody.getlocal_0();
@@ -1240,13 +1242,13 @@ function convertModule(mod) {
     iinitBody.returnvoid;
     abc.methodBody({
         method: iinit,
-        local_count: 2,
+        local_count: 1,
         code: iinitBody.toBytes()
     })
     // @fixme maybe add class and instance data in the same call?
     let inst = abc.instance({
-        name: abc.qname(globalns, 'wasm2swf'), // @todo make the namespace specifiable
-        super_name: abc.qname(globalns, 'Object'),
+        name: abc.qname(wasmns, abc.string('Instance')), // @todo make the namespace specifiable
+        super_name: abc.qname(globalns, abc.string('Object')),
         flags: 0,
         iinit,
         traits: instanceTraits,
@@ -1266,12 +1268,14 @@ function convertModule(mod) {
         code: initBody.toBytes(),
     });
     let traits = [];
+    /*
     traits.push(abc.trait({
         name: abc.qname(wasmns, abc.string('Instance')),
         kind: Trait.Class,
         slot_id: 1,
         classi: classi,
     }));
+    */
     abc.script(init, traits);
 
     let bytes = abc.toBytes();

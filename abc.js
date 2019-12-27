@@ -256,7 +256,6 @@ class Instance {
 class Trait {
     constructor(info) {
         this.kind     = info.kind     || 0;  // const
-        this.data     = info.data     || []; // depends on kind
         this.metadata = info.metadata || []; // array of metadata indexes
 
         // for Slot, Const
