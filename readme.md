@@ -2,7 +2,7 @@
 
 A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
-'''`wasm2swf` is a work in progress and doesn't quite produce valid output yet.'''
+**`wasm2swf` is a work in progress and doesn't quite produce valid output yet.**
 
 ## What?
 
