@@ -56,12 +56,11 @@ Patterns to match:
 
 ## Todo
 
-* write bytecode for constructor (imports, memory creation)
+* write full bytecode for constructor (imports, memory creation)
 * memory data initializers
 * write bytecode for import stubs (or else call imports as lexical lookups?)
 * write bytecode for the scratch helper functions
-* generate the class and instance for the module
-* complete the bytecode output (up to scripts etc)
+* export the class for the module
 * write some kind of test harness in AS3 + JS + HTML
 * hope things validate
 * bash head against wall
