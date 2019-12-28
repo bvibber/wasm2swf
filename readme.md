@@ -67,6 +67,7 @@ Patterns to match:
 * export the class for the module
 * write some kind of test harness in AS3 + JS + HTML
 * hope things validate
+* compress with lzma
 * bash head against wall
 * don't give up!
 
