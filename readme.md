@@ -12,6 +12,8 @@ This aims to be a tool that compiles standalone WebAssembly modules (`.wasm`) in
 
 Niche interest: for legacy Internet Explorer 11 support, JavaScript cross-compilation with emscripten or wasm2js produces workable code but has relatively poor performance and lacks threading. Since IE 11 comes with Flash (assuming Microsoft or Adobe don't flip a global kill switch) and Flash's ActionScript Virtual Machine (AVM2) is in some ways more advanced, it's worth investigating conversion.
 
+However if that kill switch arrives at the end of 2020 as planned, updated Windows machines will stop being able to use it. So this is a bit of an academic exercise which may or may not have direct utility.
+
 ## How?
 
 The old FlasCC/CrossBridge compiler for C/C++ is an existence proof for the possibility of running C-like code in AVM2. The frontend compilers are done for us from whatever produced the WebAssembly, so it has a smaller footprint than an entire compiler set.
