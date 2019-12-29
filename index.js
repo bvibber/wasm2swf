@@ -361,11 +361,11 @@ function convertFunction(func, abc, instanceTraits) {
 
         visitCallIndirect: (info) => {
             builder.getlocal_0(); // this argument
-            builder.getslot(tableSlot);
+            builder.getproperty(abc.qname('privatens', 'wasm2swf$table'))
             traverse(info.target);
             info.operands.forEach(traverse);
-            //let runtime = new RuntimeMultiname(); // @FIXME call indirect is broken for now
-            let runtime = builder.rtqnameL();
+            let pubset = abc.ns_set([pubns]);
+            let runtime = abc.multinameL(pubset);
             builder.callproperty(runtime, info.operands.length);
             switch (info.type) {
                 case binaryen.none:
