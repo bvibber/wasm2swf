@@ -99,21 +99,7 @@ function avmType(t) {
     }
 }
 
-const methods = [];
-const methodIndexes = {};
 const imports = [];
-
-function addMethod(name) {
-    return methodIndexes[name] = (methods.push(name) - 1);
-}
-
-function methodIndex(name) {
-    if (methodIndexes[name] !== undefined) {
-        return methodIndexes[name];
-    } else {
-        throw new Error('Unknown function ' + name);
-    }
-}
 
 function walkExpression(expr, callbacks) {
     let info = binaryen.getExpressionInfo(expr);
@@ -1204,19 +1190,7 @@ function convertModule(mod) {
         'remove-unused-module-elements',
     ]);
 
-    // First assign slot indexes 
-    for (let i = 0; i < mod.getNumFunctions(); i++) {
-        let func = mod.getFunctionByIndex(i);
-        let info = binaryen.getFunctionInfo(func);
-        let index = addMethod(info.name);
-        methodIndexes[info.name] = index;
-    }
-
-    for (let index in methods) {
-        let name = methods[index];
-        console.log('method', index, name);
-    }
-
+    // Convert functions to methods
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
         convertFunction(func, abc, instanceTraits, addGlobal);
