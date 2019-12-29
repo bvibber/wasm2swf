@@ -450,7 +450,7 @@ function convertFunction(func, abc, instanceTraits) {
             if (info.offset > 0) {
                 if (info.offset <= 255) {
                     builder.pushbyte(info.offset);
-                } else if (info.offset <= U30_MAX) {
+                } else if (info.offset >= -32768 && info.offset <= 32767) {
                     builder.pushshort(info.offset);
                 } else {
                     builder.pushint(info.offset);
@@ -496,7 +496,7 @@ function convertFunction(func, abc, instanceTraits) {
             if (info.offset > 0) {
                 if (info.offset <= 255) {
                     builder.pushbyte(info.offset);
-                } else if (info.offset <= U30_MAX) {
+                } else if (info.offset >= -32768 && info.offset <= 32767) {
                     builder.pushshort(info.offset);
                 } else {
                     builder.pushint(info.offset);
@@ -540,7 +540,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.i32:
                     if (info.value >= 0 && info.value <= 255) {
                         builder.pushbyte(info.value);
-                    } else if (info.value >= 0 && info.value <= U30_MAX) {
+                    } else if (info.offset >= -32768 && info.offset <= 32767) {
                         builder.pushshort(info.value);
                     } else {
                         builder.pushint(info.value);
