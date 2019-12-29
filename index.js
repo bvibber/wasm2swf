@@ -1241,7 +1241,7 @@ function convertModule(mod) {
     cinitBody.returnvoid();
     abc.methodBody({
         method: cinit,
-        local_count: 2,
+        local_count: 1,
         code: cinitBody.toBytes()
     });
     let classi = abc.addClass(cinit, classTraits);
@@ -1318,11 +1318,10 @@ function convertModule(mod) {
         abc.qname(pubns, abc.string('Object'))
     ));
 
-
     iinitBody.returnvoid;
     abc.methodBody({
         method: iinit,
-        local_count: 1,
+        local_count: 2,
         code: iinitBody.toBytes()
     })
 
