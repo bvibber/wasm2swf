@@ -99,37 +99,9 @@ function avmType(t) {
     }
 }
 
-const slots = [
-    {
-        name: 'wasm2swf_reserved',
-        type: 'undefined',
-    },
-    {
-        name: 'wasm2swf_memory',
-        type: 'ByteArray',
-    },
-    {
-        name: 'wasm2swf_table',
-        type: 'Array',
-    }
-];
-const memorySlot = 1;
-const tableSlot = 2;
-const globalSlots = {};
-
 const methods = [];
 const methodIndexes = {};
 const imports = [];
-
-function addSlot(name, type) {
-    if (globalSlots[name] === undefined) {
-        globalSlots[name] = slots.push({
-            name,
-            type
-        }) - 1;
-    }
-    return globalSlots[name];
-}
 
 function addMethod(name) {
     return methodIndexes[name] = (methods.push(name) - 1);
@@ -157,7 +129,7 @@ function walkExpression(expr, callbacks) {
     }
 }
 
-function convertFunction(func, abc, instanceTraits) {
+function convertFunction(func, abc, instanceTraits, addGlobal) {
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
     let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
 
@@ -340,7 +312,7 @@ function convertFunction(func, abc, instanceTraits) {
         visitCall: (info) => {
             builder.getlocal_0(); // this argument
             info.operands.forEach(traverse);
-            let method = abc.qname(privatens, 'func$' + info.target);
+            let method = abc.qname(privatens, abc.string('func$' + info.target));
             switch (info.type) {
                 case binaryen.none:
                     builder.callpropvoid(method, info.operands.length);
@@ -428,18 +400,30 @@ function convertFunction(func, abc, instanceTraits) {
         },
 
         visitGlobalGet: (info) => {
+            let name = abc.qname(privatens, abc.string('global$' + info.name));
+            let type = abc.qname(pubns, avmType(info.type));
+            addGlobal(name, type);
+    
             builder.getlocal_0(); // 'this' param
-            let index = addSlot('global$' + info.name,
-                abc.qname(pubns, avmType(info.type)));
-            builder.getslot(index);
+            builder.getproperty(name);
+            switch (info.type) {
+                case binaryen.i32:
+                    builder.convert_i();
+                    break;
+                case binaryen.f32:
+                case binaryen.f64:
+                    builder.convert_d();
+                    break;
+            }
         },
 
         visitGlobalSet: (info) => {
-            builder.getlocal_0(); // 'this' param
+            let name = abc.qname(privatens, abc.string('global$' + info.name));
+            let type = abc.qname(pubns, avmType(info.type));
+            addGlobal(name, type);
+
             traverse(info.value);
-            let index = addSlot('global$' + info.name,
-                abc.qname(pubns, avmType(info.type)));
-            builder.setslot(index);
+            builder.setproperty(name);
         },
 
         visitLoad: (info) => {
@@ -566,7 +550,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.ClzInt32:
                     builder.getlocal_0(); // 'this'
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, 'wasm2swf_clz32'), 1);
+                    builder.callproperty(abc.qname(pubns, abc.string('wasm2swf_clz32')), 1);
                     builder.convert_i();
                     break;
                 case binaryen.CtzInt32:
@@ -582,23 +566,23 @@ function convertFunction(func, abc, instanceTraits) {
                     break;
                 case binaryen.AbsFloat32:
                 case binaryen.AbsFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, 'abs'), 1);
+                    builder.callproperty(abc.qname(pubns, abc.string('abs')), 1);
                     builder.convert_d();
                     break;
                 case binaryen.CeilFloat32:
                 case binaryen.CeilFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, 'ceil'), 1);
+                    builder.callproperty(abc.qname(pubns, abc.string('ceil')), 1);
                     builder.convert_d();
                     break;
                 case binaryen.FloorFloat32:
                 case binaryen.FloorFloat64:
                     builder.getlex(abc.qname(pubns, 'Math'));
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, 'floor'), 1);
+                    builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
                     builder.convert_d();
                     break;
                 case binaryen.TruncFloat32:
@@ -613,7 +597,7 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.SqrtFloat64:
                     builder.getlex(abc.qname(pubns, 'Math'));
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, 'sqrt'), 1);
+                    builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
                     builder.convert_d();
                     break;
 
@@ -640,10 +624,10 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.ReinterpretFloat32:
                     builder.getlocal_0(); // 'this'
                     traverse(info.value);
-                    builder.callpropvoid(abc.qname(pubns, 'wasm2js_scratch_store_f32'), 1);
+                    builder.callpropvoid(abc.qname(pubns, abc.string('wasm2js_scratch_store_f32')), 1);
 
                     builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(pubns, 'wasm2js_scratch_load_i32'), 0);
+                    builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 0);
                     builder.convert_i();
 
                     break;
@@ -669,11 +653,11 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.ReinterpretInt32:
                     builder.getlocal_0(); // 'this'
                     traverse(info.value);
-                    builder.callpropvoid(abc.qname(privatens, 'func$wasm2js_scratch_store_i32'), 1);
+                    builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 1);
                     builder.pop();
 
                     builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(privatens, 'func$wasm2js_scratch_load_f32'), 0);
+                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
                     builder.convert_d();
 
                     break;
@@ -899,14 +883,16 @@ function convertFunction(func, abc, instanceTraits) {
                     builder.getlex(abc.qname(pubns, 'Math'));
                     traverse(info.left);
                     traverse(info.right);
-                    builder.callproperty(abc.qname(pubns, 'min'), 2);
+                    builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
+                    builder.convert_d();
                     break;
                 case binaryen.MaxFloat32:
                 case binaryen.MaxFloat64:
                     builder.getlex(abc.qname(pubns, 'Math'));
                     traverse(info.left);
                     traverse(info.right);
-                    builder.callproperty(abc.qname(pubns, 'max'), 2);
+                    builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
+                    builder.convert_d();
                     break;
 
                 // relational ops
@@ -989,12 +975,12 @@ function convertFunction(func, abc, instanceTraits) {
                 case binaryen.MemoryGrow:
                     builder.getlocal_0(); // 'this'
                     traverse(info.operands[0]);
-                    builder.callproperty(abc.qname(pubns, 'func$wasm2swf_memory_grow'), 1);
+                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2swf_memory_grow')), 1);
                     builder.convert_i();
                     break;
                 case binaryen.MemorySize:
                     builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(pubns, 'func$wasm2swf_memory_size'), 0);
+                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2swf_memory_size')), 0);
                     builder.convert_i();
                     break;
                 default:
@@ -1065,21 +1051,23 @@ function convertFunction(func, abc, instanceTraits) {
     } else {
         // Import function.
         console.log('import from: ' + info.module + '.' + info.base);
-        let slot = addSlot('import$' + info.module + '$' + info.base,
-            abc.qname(pubns, 'Function')
-        );
+        let name = abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base));
+        instanceTraits.push(abc.trait({
+            name: name,
+            kind: Trait.Slot,
+            type_name: abc.qname(pubns, abc.string('Function')),
+            vkind: Trait.Null
+        }));
         imports.push(info);
         builder.getlocal_0();
-        builder.getslot(slot);
-        builder.pushnull();
         for (let index = 0; index < argTypes.length; index++) {
             builder.getlocal(index + 1);
         }
-        builder.call(argTypes.length);
         if (info.results == binaryen.none) {
-            builder.pop();
+            builder.callpropvoid(name, argTypes.length);
             builder.returnvoid();
         } else {
+            builder.callproperty(name, argTypes.length);
             // it will be coerced to the correct type
             builder.returnvalue();
         }
@@ -1099,7 +1087,6 @@ function convertFunction(func, abc, instanceTraits) {
 
     instanceTraits.push(abc.trait({
         name: abc.qname(privatens, abc.string('func$' + info.name)),
-        //name: abc.qname(pubns, abc.string(info.name)),
         kind: Trait.Method,
         disp_id: method, // compiler-assigned, so use the same one
         method
@@ -1124,6 +1111,29 @@ function convertModule(mod) {
     let type_f = binaryen.createType([binaryen.f32]);
     let type_d = binaryen.createType([binaryen.f64]);
     let type_dd = binaryen.createType([binaryen.f64, binaryen.f64]);
+
+    let classTraits = [];
+    let instanceTraits = [];
+
+    let knownGlobals = {};
+    function addGlobal(name, type) {
+        if (!knownGlobals[name]) {
+            instanceTraits.push(abc.trait({
+                name: name,
+                kind: Trait.Slot,
+                type_name: type,
+            }));
+            knownGlobals[name] = true;
+        }
+    }
+    addGlobal(
+        abc.qname(privatens, abc.string('wasm2swf$memory')),
+        abc.qname(flashutilsns, abc.string('ByteArray'))
+    );
+    addGlobal(
+        abc.qname(privatens, abc.string('wasm2swf$table')),
+        abc.qname(pubns, abc.string('Array'))
+    );
 
     function addImport(name, params, ret) {
         mod.addFunctionImport(
@@ -1206,11 +1216,9 @@ function convertModule(mod) {
         console.log('method', index, name);
     }
 
-    let classTraits = [];
-    let instanceTraits = [];
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
-        convertFunction(func, abc, instanceTraits);
+        convertFunction(func, abc, instanceTraits, addGlobal);
     }
 
     // Class static initializer
@@ -1249,9 +1257,7 @@ function convertModule(mod) {
     iinitBody.dup();
     iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
-    iinitBody.setslot(addSlot('wasm2swf_memory',
-        abc.qname(flashutilsns, abc.string('ByteArray'))
-    ));
+    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm2swf$memory')));
 
     // Initialize the table
     iinitBody.getlocal_0();
@@ -1259,9 +1265,7 @@ function convertModule(mod) {
     iinitBody.construct(0);
     // @fixme implement the initializer segments
     // needs accessors added to binaryen.js
-    iinitBody.setslot(addSlot('wasm2swf_table',
-        abc.qname(flashutilsns, abc.string('ByteArray'))
-    ));
+    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm2swf$table')));
 
     // Initialize the import function slots
     for (let info of imports) {
@@ -1269,10 +1273,7 @@ function convertModule(mod) {
         console.log(info);  
         iinitBody.getproperty(abc.qname(pubns, abc.string(info.module)));
         iinitBody.getproperty(abc.qname(pubns, abc.string(info.base)));
-        iinitBody.setslot(addSlot(
-            'import$' + info.module + '$' + info.base,
-            abc.qname(pubns, abc.string('Function'))
-        ));
+        iinitBody.initproperty(abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base)));
     }
 
     // Initialize the export object
@@ -1296,9 +1297,7 @@ function convertModule(mod) {
             }
         }
     }
-    iinitBody.setslot(addSlot('exports',
-        abc.qname(pubns, abc.string('Object'))
-    ));
+    iinitBody.initproperty(abc.qname(pubns, abc.string('exports')));
 
     iinitBody.returnvoid();
     abc.methodBody({

@@ -290,6 +290,17 @@ class Trait {
     static Final = 0x10;
     static Override = 0x20;
     static Metadata = 0x40;
+
+    // vkind
+    static Int = 0x03;
+    static UInt = 0x04;
+    static Double = 0x06;
+    static Utf8 = 0x01;
+    static True = 0x0b;
+    static False = 0x0a;
+    static Null = 0x0c;
+    static Undefined = 0x00;
+
 }
 
 class Class {
@@ -1189,6 +1200,12 @@ class MethodBuilder extends ABCBuilder {
     increment_i() {
         this.log('increment_i');
         this.u8(0xc0);
+    }
+
+    initproperty(index) {
+        this.log('initproperty', index);
+        this.u8(0x68);
+        this.u32(index);
     }
 
     jump(label) {
