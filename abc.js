@@ -797,7 +797,7 @@ class ABCFileBuilder extends ABCBuilder {
         this.u30(aclass.cinit);
         this.u30(aclass.traits.length);
         for (let trait of aclass.traits) {
-            this.u30(trait);
+            this.traits_info(trait);
         }
     }
 
@@ -805,7 +805,7 @@ class ABCFileBuilder extends ABCBuilder {
         this.u30(script.init);
         this.u30(script.traits.length);
         for (let trait of script.traits) {
-            this.u30(trait);
+            this.traits_info(trait);
         }
     }
 

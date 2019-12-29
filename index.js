@@ -1307,8 +1307,9 @@ function convertModule(mod) {
     })
 
     // @fixme maybe add class and instance data in the same call?
+    let className = abc.qname(wasmns, abc.string('Instance'));
     let inst = abc.instance({
-        name: abc.qname(wasmns, abc.string('Instance')), // @todo make the namespace specifiable
+        name: className, // @todo make the namespace specifiable
         super_name: abc.qname(pubns, abc.string('Object')),
         flags: 0,
         iinit,
@@ -1329,14 +1330,12 @@ function convertModule(mod) {
         code: initBody.toBytes(),
     });
     let traits = [];
-    /*
     traits.push(abc.trait({
-        name: abc.qname(wasmns, abc.string('Instance')),
+        name: className,
         kind: Trait.Class,
-        slot_id: 1,
+        slot_id: 0,
         classi: classi,
     }));
-    */
     abc.script(init, traits);
 
     let bytes = abc.toBytes();
