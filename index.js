@@ -1268,11 +1268,13 @@ function convertModule(mod) {
                 iinitBody.dup(); // 'exports' object
                 iinitBody.getlocal_0(); // 'imports'
                 iinitBody.getproperty(abc.qname(privatens, abc.string('func$' + info.value)));
-                iinitBody.setproperty(abc.qname(pubns, abc.string(info.name)));
+                iinitBody.initproperty(abc.qname(pubns, abc.string(info.name)));
                 break;
             }
             default: {
-                // ignore for now
+                // @todo export memory
+                // @todo export table
+                // @todo export globals
             }
         }
     }
