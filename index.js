@@ -1056,7 +1056,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             name: name,
             kind: Trait.Slot,
             type_name: abc.qname(pubns, abc.string('Function')),
-            vkind: Trait.Null
         }));
         imports.push(info);
         builder.getlocal_0();
