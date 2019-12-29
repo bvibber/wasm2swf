@@ -1284,6 +1284,12 @@ class MethodBuilder extends ABCBuilder {
         this.u30(arg_count);
     }
 
+    newclass(index) {
+        this.log('newclass', index);
+        this.u8(0x58);
+        this.u30(index);
+    }
+
     newfunction(index) {
         this.log('newfunction', index);
         this.u8(0x40);
@@ -1303,6 +1309,11 @@ class MethodBuilder extends ABCBuilder {
     pop() {
         this.log('pop');
         this.u8(0x29);
+    }
+
+    popscope() {
+        this.log('popscope');
+        this.u8(0x1d);
     }
 
     pushbyte(byte_value) {
@@ -1338,6 +1349,11 @@ class MethodBuilder extends ABCBuilder {
     pushnull() {
         this.log('pushnull');
         this.u8(0x20);
+    }
+
+    pushscope() {
+        this.log('pushscope');
+        this.u8(0x30);
     }
 
     pushshort(int_value) {

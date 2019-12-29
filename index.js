@@ -1069,6 +1069,8 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     let body = abc.methodBody({
         method,
         local_count: localTypes.length + 1,
+        init_scope_depth: 2,
+        max_scope_depth: 2,
         code: builder.toBytes()
     });
 
@@ -1207,6 +1209,8 @@ function convertModule(mod) {
     abc.methodBody({
         method: cinit,
         local_count: 1,
+        init_scope_depth: 2,
+        max_scope_depth: 2,
         code: cinitBody.toBytes()
     });
     let classi = abc.addClass(cinit, classTraits);
@@ -1278,10 +1282,13 @@ function convertModule(mod) {
     abc.methodBody({
         method: iinit,
         local_count: 2,
+        init_scope_depth: 2,
+        max_scope_depth: 2,
         code: iinitBody.toBytes()
     })
 
     // @fixme maybe add class and instance data in the same call?
+    let nameObject = abc.qname(pubns, abc.string('Object'));
     let className = abc.qname(wasmns, abc.string('Instance'));
     let inst = abc.instance({
         name: className, // @todo make the namespace specifiable
@@ -1295,13 +1302,22 @@ function convertModule(mod) {
     const init = abc.method({
         name: abc.string('wasm2swf_init'),
         return_type: abc.qname(pubns, abc.string('void')),
-        param_types: [abc.qname(pubns, abc.string('Object'))],
+        param_types: [nameObject],
     });
     let initBody = abc.methodBuilder();
+    initBody.getscopeobject(0); // get global scope
+    initBody.getlex(nameObject); // get base scope
+    initBody.pushscope();
+    initBody.getlex(nameObject); // get base class
+    initBody.newclass(classi);
+    initBody.popscope();
+    initBody.initproperty(className);
     initBody.returnvoid();
     abc.methodBody({
         method: init,
         local_count: 1,
+        init_scope_depth: 1,
+        max_scope_depth: 2,
         code: initBody.toBytes(),
     });
     let traits = [];
