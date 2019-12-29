@@ -929,7 +929,6 @@ class MethodBuilder extends ABCBuilder {
     }
 
     callproperty(index, arg_count) {
-        // @fixme change index to take a Multiname runtime object?
         this.log('callproperty', index, arg_count);
         this.u8(0x46);
         this.u30(index); // a multiname index
@@ -937,9 +936,15 @@ class MethodBuilder extends ABCBuilder {
     }
 
     callproplex(index, arg_count) {
-        // @fixme change index to take a Multiname runtime object?
         this.log('callproplex', index, arg_count);
         this.u8(0x4c);
+        this.u30(index); // a multiname index
+        this.u30(arg_count);
+    }
+
+    callpropvoid(index, arg_count) {
+        this.log('callpropvoid', index, arg_count);
+        this.u8(0x46);
         this.u30(index); // a multiname index
         this.u30(arg_count);
     }

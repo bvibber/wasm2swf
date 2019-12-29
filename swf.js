@@ -161,6 +161,10 @@ class SWFFileBuilder extends SWFBuilder {
         this.tag(76, tag.toBytes());
     }
 
+    end() {
+        this.tag(0, []);
+    }
+
     static kDoAbcLazyInitializeFlag = 1;
 }
 
