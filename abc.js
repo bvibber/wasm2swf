@@ -212,7 +212,7 @@ class OptionDetail {
 class MethodBody {
     constructor(info) {
         this.method = info.method || 0;
-        this.max_stack = info.max_stack || 4096; // ! just use a large #?
+        this.max_stack = info.max_stack || 256; // ! just use a large #?
         this.local_count = info.local_count || 0; // includes args?
         this.init_scope_depth = info.init_scope_depth || 0;
         this.max_scope_depth = info.max_scope_depth || 0;
@@ -968,9 +968,10 @@ class MethodBuilder extends ABCBuilder {
         this.u30(arg_count);
     }
 
-    constructsuper() {
-        this.log('constructsuper');
+    constructsuper(arg_count) {
+        this.log('constructsuper', arg_count);
         this.u8(0x49);
+        this.u30(arg_count);
     }
 
     convert_i() {
