@@ -151,7 +151,9 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             let label = new Label(name);
             labelStack.push(label);
             info.children.forEach(traverse);
-            builder.label(label);
+            if (label.used) {
+                builder.label(label);
+            }
             labelStack.pop();
         },
 

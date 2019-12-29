@@ -845,6 +845,7 @@ class Label {
             name = '$$label$' + (++labelIndex);
         }
         this.name = name;
+        this.used = false;
     }
 }
 
@@ -875,6 +876,7 @@ class MethodBuilder extends ABCBuilder {
     }
 
     relativeAddress(label) {
+        label.used = true;
         if (this.addresses.has(label)) {
             let addr = this.offset() + 3;
             this.s24(this.addresses.get(label) - addr);
