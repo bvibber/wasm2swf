@@ -521,7 +521,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 case binaryen.i32:
                     if (info.value >= 0 && info.value <= 255) {
                         builder.pushbyte(info.value);
-                    } else if (info.offset >= -32768 && info.offset <= 32767) {
+                    } else if (info.value >= -32768 && info.value <= 32767) {
                         builder.pushshort(info.value);
                     } else {
                         builder.pushint(info.value);

@@ -1373,7 +1373,7 @@ class MethodBuilder extends ABCBuilder {
     }
 
     pushshort(int_value) {
-        if (int_value > 32767 || int_value <= -32768) {
+        if (int_value > 32767 || int_value < -32768) {
             throw new Error('pushshort out of bounds');
         }
         this.log('pushshort', int_value);
