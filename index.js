@@ -321,7 +321,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitCallIndirect: (info) => {
             builder.getlocal_0(); // this argument
-            builder.getproperty(abc.qname('privatens', 'wasm2swf$table'))
+            builder.getproperty(abc.qname('privatens', abc.string('wasm2swf$table')))
             traverse(info.target);
             info.operands.forEach(traverse);
             let pubset = abc.ns_set([pubns]);
@@ -389,7 +389,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitGlobalGet: (info) => {
             let name = abc.qname(privatens, abc.string('global$' + info.name));
-            let type = abc.qname(pubns, avmType(info.type));
+            let type = abc.qname(pubns, abc.string(avmType(info.type)));
             addGlobal(name, type);
     
             builder.getlocal_0(); // 'this' param
@@ -407,7 +407,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitGlobalSet: (info) => {
             let name = abc.qname(privatens, abc.string('global$' + info.name));
-            let type = abc.qname(pubns, avmType(info.type));
+            let type = abc.qname(pubns, abc.string(avmType(info.type)));
             addGlobal(name, type);
 
             traverse(info.value);
@@ -568,7 +568,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.FloorFloat32:
                 case binaryen.FloorFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.value);
                     builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
                     builder.convert_d();
@@ -583,7 +583,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.SqrtFloat32:
                 case binaryen.SqrtFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.value);
                     builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
                     builder.convert_d();
@@ -868,7 +868,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.MinFloat32:
                 case binaryen.MinFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.left);
                     traverse(info.right);
                     builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
@@ -876,7 +876,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.MaxFloat32:
                 case binaryen.MaxFloat64:
-                    builder.getlex(abc.qname(pubns, 'Math'));
+                    builder.getlex(abc.qname(pubns, abc.string('Math')));
                     traverse(info.left);
                     traverse(info.right);
                     builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
@@ -1069,15 +1069,15 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     abc.methodBody({
         method,
         local_count: localTypes.length + 1,
-        init_scope_depth: 2,
-        max_scope_depth: 2,
+        init_scope_depth: 3,
+        max_scope_depth: 3,
         code: builder.toBytes()
     });
 
     instanceTraits.push(abc.trait({
         name: abc.qname(privatens, abc.string('func$' + info.name)),
         kind: Trait.Method,
-        disp_id: method, // compiler-assigned, so use the same one
+        //disp_id: method, // compiler-assigned, so use the same one
         method
     }));
 
@@ -1209,8 +1209,8 @@ function convertModule(mod) {
     abc.methodBody({
         method: cinit,
         local_count: 1,
-        init_scope_depth: 2,
-        max_scope_depth: 2,
+        init_scope_depth: 3,
+        max_scope_depth: 3,
         code: cinitBody.toBytes()
     });
     let classi = abc.addClass(cinit, classTraits);
@@ -1286,8 +1286,8 @@ function convertModule(mod) {
     abc.methodBody({
         method: iinit,
         local_count: 2,
-        init_scope_depth: 2,
-        max_scope_depth: 2,
+        init_scope_depth: 3,
+        max_scope_depth: 3,
         code: iinitBody.toBytes()
     });
 
@@ -1322,8 +1322,8 @@ function convertModule(mod) {
     abc.methodBody({
         method: init,
         local_count: 1,
-        init_scope_depth: 0,
-        max_scope_depth: 2,
+        init_scope_depth: 1,
+        max_scope_depth: 3,
         code: initBody.toBytes(),
     });
     let traits = [];
