@@ -1422,22 +1422,45 @@ function convertModule(mod) {
         let ex = mod.getExportByIndex(i);
         let info = binaryen.getExportInfo(ex);
         console.log('export', info);
+        nprops++;
+        let privname;
         switch (info.kind) {
-            case binaryen.ExternalFunction: {
-                nprops++;
-                let privname = abc.string('func$' + info.value);
-                let pubname = abc.string(info.name);
-                iinitBody.pushstring(pubname)
-                iinitBody.getlocal_0(); // 'this'
-                iinitBody.getproperty(abc.qname(privatens, privname));
+            case binaryen.ExternalGlobal:
+                // note we can't get a list of globals yet
+                // so this is required to ensure we initialize all exported globals
+                // evne if not referenced in methods
+                {
+                    let globalId = mod.getGlobal(info.value);
+                    let globalInfo = binaryen.getGlobalInfo(globalId);
+
+                    let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
+                    let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                    addGlobal(name, type);
+                }
+
+                // @fixme this should export a WebAssembly.Global wrapper object
+                privname = abc.string('global$' + info.value);
                 break;
-            }
+            case binaryen.ExternalFunction:
+                privname = abc.string('func$' + info.value);
+                break;
+            case binaryen.ExternalMemory:
+                // @fixme this should export a WebAssembly.Memory wrapper object
+                privname = abc.string('wasm$memory');
+                break;
+            case binaryen.ExternalTable:
+                // @fixme this should export a WebAssembly.Table wrapper object
+                privname = abc.string('wasm$table');
+                break;
             default: {
-                // @todo export memory
-                // @todo export table
-                // @todo export globals
+                console.log(info);
+                throw new Error('unexpected export type');
             }
         }
+        let pubname = abc.string(info.name);
+        iinitBody.pushstring(pubname)
+        iinitBody.getlocal_0(); // 'this'
+        iinitBody.getproperty(abc.qname(privatens, privname));
     }
     iinitBody.newobject(nprops);
     iinitBody.initproperty(abc.qname(pubns, abc.string('exports')));
