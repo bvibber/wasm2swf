@@ -326,16 +326,17 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             info.operands.forEach(traverse);
             let pubset = abc.ns_set([pubns]);
             let runtime = abc.multinameL(pubset);
-            builder.callproperty(runtime, info.operands.length);
             switch (info.type) {
                 case binaryen.none:
-                    builder.pop();
+                    builder.callpropvoid(runtime, info.operands.length);
                     break;
                 case binaryen.i32:
+                    builder.callproperty(runtime, info.operands.length);
                     builder.convert_i();
                     break;
                 case binaryen.f32:
                 case binaryen.f64:
+                    builder.callproperty(runtime, info.operands.length);
                     builder.convert_d();
                     break;
                 default:
@@ -953,6 +954,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         },
 
         visitDrop: (info) => {
+            traverse(info.value);
             builder.pop();
         },
 
