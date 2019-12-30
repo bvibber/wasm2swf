@@ -253,7 +253,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             labelStack.push(start);
             builder.label(start);
             traverse(info.body);
-            builder.jump(start);
             labelStack.pop();
         },
     

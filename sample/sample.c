@@ -13,3 +13,18 @@ float sample_add_f32(float a, float b) {
 double sample_add_f64(double a, double b) {
     return a + b;
 }
+
+int mandelbrot(int max_iters, double cx, double cy) {
+    double x0 = cx;
+    double y0 = cy;
+    double x = 0.0;
+    double y = 0.0;
+    int iter = 0;
+    while (x * x + y * y <= 4 && iter < max_iters) {
+        double xtemp = x * x - y * y + x0;
+        y = 2 * x * y + y0;
+        x = xtemp;
+        iter++;
+    }
+    return iter;
+}
