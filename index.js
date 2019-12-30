@@ -1123,6 +1123,10 @@ function convertModule(mod) {
         }
     }
     addGlobal(
+        abc.qname(pubns, abc.string('exports')),
+        abc.qname(pubns, abc.string('Object'))
+    );
+    addGlobal(
         abc.qname(privatens, abc.string('wasm2swf$memory')),
         abc.qname(flashutilsns, abc.string('ByteArray'))
     );
