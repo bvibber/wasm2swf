@@ -1066,7 +1066,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         param_types: argTypes.map((type) => abc.qname(pubns, abc.string(type))),
     });
 
-    let body = abc.methodBody({
+    abc.methodBody({
         method,
         local_count: localTypes.length + 1,
         init_scope_depth: 2,
@@ -1281,22 +1281,22 @@ function convertModule(mod) {
     }
     iinitBody.newobject(nprops);
     iinitBody.initproperty(abc.qname(pubns, abc.string('exports')));
-
     iinitBody.returnvoid();
+
     abc.methodBody({
         method: iinit,
         local_count: 2,
         init_scope_depth: 2,
         max_scope_depth: 2,
         code: iinitBody.toBytes()
-    })
+    });
 
     // @fixme maybe add class and instance data in the same call?
     let nameObject = abc.qname(pubns, abc.string('Object'));
     let className = abc.qname(wasmns, abc.string('Instance'));
-    let inst = abc.instance({
+    abc.instance({
         name: className, // @todo make the namespace specifiable
-        super_name: abc.qname(pubns, abc.string('Object')),
+        super_name: nameObject,
         flags: 0,
         iinit,
         traits: instanceTraits,

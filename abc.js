@@ -582,6 +582,9 @@ class ABCFileBuilder extends ABCBuilder {
             this.metadata_info(metadata);
         }
 
+        if (file.classes.length !== file.instances.length) {
+            throw new Error('Mismatched classes and instances length');
+        }
         this.u30(file.classes.length);
         for (let instance of file.instances) {
             this.instance_info(instance);
