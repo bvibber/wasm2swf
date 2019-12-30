@@ -1256,10 +1256,10 @@ function convertModule(mod) {
 
     // Initialize the import function slots
     for (let info of imports) {
-        iinitBody.getlocal_1();
-        console.log(info);  
-        iinitBody.getproperty(abc.qname(pubns, abc.string(info.module)));
-        iinitBody.getproperty(abc.qname(pubns, abc.string(info.base)));
+        iinitBody.getlocal_0(); // 'this'
+        iinitBody.getlocal_1(); // imports
+        iinitBody.getproperty(abc.qname(pubns, abc.string(info.module))); // imports.env
+        iinitBody.getproperty(abc.qname(pubns, abc.string(info.base)));   // imports.env.somethingCool
         iinitBody.initproperty(abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base)));
     }
 
@@ -1330,8 +1330,8 @@ function convertModule(mod) {
     abc.methodBody({
         method: init,
         local_count: 1,
-        init_scope_depth: 1,
-        max_scope_depth: 3,
+        init_scope_depth: 0,
+        max_scope_depth: 2,
         code: initBody.toBytes(),
     });
     let traits = [];
