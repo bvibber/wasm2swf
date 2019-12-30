@@ -388,8 +388,11 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         },
 
         visitGlobalGet: (info) => {
-            let name = abc.qname(privatens, abc.string('global$' + info.name));
-            let type = abc.qname(pubns, abc.string(avmType(info.type)));
+            let globalId = mod.getGlobal(info.name);
+            let globalInfo = binaryen.getGlobalInfo(globalId);
+
+            let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
+            let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
             addGlobal(name, type);
     
             builder.getlocal_0(); // 'this' param
@@ -406,10 +409,14 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         },
 
         visitGlobalSet: (info) => {
-            let name = abc.qname(privatens, abc.string('global$' + info.name));
-            let type = abc.qname(pubns, abc.string(avmType(info.type)));
+            let globalId = mod.getGlobal(info.name);
+            let globalInfo = binaryen.getGlobalInfo(globalId);
+
+            let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
+            let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
             addGlobal(name, type);
 
+            builder.getlocal_0();
             traverse(info.value);
             builder.setproperty(name);
         },
@@ -1099,7 +1106,6 @@ function convertModule(mod) {
     let type_i = binaryen.createType([binaryen.i32]);
     let type_f = binaryen.createType([binaryen.f32]);
     let type_d = binaryen.createType([binaryen.f64]);
-    let type_dd = binaryen.createType([binaryen.f64, binaryen.f64]);
 
     let classTraits = [];
     let instanceTraits = [];
