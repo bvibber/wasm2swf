@@ -1219,7 +1219,7 @@ function convertModule(mod) {
     let iinit = abc.method({
         name: abc.string('wasm2swf_iinit'),
         return_type: abc.qname(pubns, abc.string('void')),
-        param_types: [abc.qname(pubns, abc.string('Array'))],
+        param_types: [abc.qname(pubns, abc.string('Object'))],
     });
 
     let iinitBody = abc.methodBuilder();
@@ -1256,19 +1256,20 @@ function convertModule(mod) {
     }
 
     // Initialize the export object
-    iinitBody.getlocal_0();
-    iinitBody.getlex(abc.qname(pubns, abc.string('Object')));
-    iinitBody.construct(0);
+    iinitBody.getlocal_0(); // 'this'
+    let nprops = 0;
     for (let i = 0; i < mod.getNumExports(); i++) {
         let ex = mod.getExportByIndex(i);
         let info = binaryen.getExportInfo(ex);
         console.log('export', info);
         switch (info.kind) {
             case binaryen.ExternalFunction: {
-                iinitBody.dup(); // 'exports' object
-                iinitBody.getlocal_0(); // 'imports'
-                iinitBody.getproperty(abc.qname(privatens, abc.string('func$' + info.value)));
-                iinitBody.initproperty(abc.qname(pubns, abc.string(info.name)));
+                nprops++;
+                let privname = abc.string('func$' + info.value);
+                let pubname = abc.string(info.name);
+                iinitBody.pushstring(pubname)
+                iinitBody.getlocal_0(); // 'this'
+                iinitBody.getproperty(abc.qname(privatens, privname));
                 break;
             }
             default: {
@@ -1278,6 +1279,7 @@ function convertModule(mod) {
             }
         }
     }
+    iinitBody.newobject(nprops);
     iinitBody.initproperty(abc.qname(pubns, abc.string('exports')));
 
     iinitBody.returnvoid();
@@ -1304,11 +1306,13 @@ function convertModule(mod) {
     const init = abc.method({
         name: abc.string('wasm2swf_init'),
         return_type: abc.qname(pubns, abc.string('void')),
-        param_types: [nameObject],
+        param_types: [],
     });
     let initBody = abc.methodBuilder();
-    initBody.getscopeobject(0); // get global scope
-    initBody.getlex(nameObject); // get base scope
+    initBody.getlocal_0(); // 'this' for pushscope
+    initBody.pushscope();
+    initBody.findpropstrict(className); // find where to store the class property soon...
+    initBody.getlex(nameObject); // get base class scope
     initBody.pushscope();
     initBody.getlex(nameObject); // get base class
     initBody.newclass(classi);
@@ -1318,7 +1322,7 @@ function convertModule(mod) {
     abc.methodBody({
         method: init,
         local_count: 1,
-        init_scope_depth: 1,
+        init_scope_depth: 0,
         max_scope_depth: 2,
         code: initBody.toBytes(),
     });

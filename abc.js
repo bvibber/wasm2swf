@@ -1026,6 +1026,12 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0xab);
     }
 
+    findpropstrict(index) {
+        this.log('findpropstrict', index);
+        this.u8(0x5d);
+        this.u30(index);
+    }
+
     getlex(index) {
         this.log('getlex', index);
         this.u8(0x60);
@@ -1295,6 +1301,12 @@ class MethodBuilder extends ABCBuilder {
         this.log('newfunction', index);
         this.u8(0x40);
         this.u30(index);
+    }
+
+    newobject(arg_count) {
+        this.log('newobject', arg_count);
+        this.u8(0x55);
+        this.u30(arg_count);
     }
 
     nop() {
