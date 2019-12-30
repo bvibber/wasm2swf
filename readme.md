@@ -2,7 +2,7 @@
 
 A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
-**`wasm2swf` is a work in progress and doesn't quite produce valid output yet.**
+**`wasm2swf` is a work in progress and doesn't produce fully working output yet.**
 
 ## What?
 
@@ -16,7 +16,7 @@ However if that kill switch arrives at the end of 2020 as planned, updated Windo
 
 ## How?
 
-The old FlasCC/CrossBridge compiler for C/C++ is an existence proof for the possibility of running C-like code in AVM2. The frontend compilers are done for us from whatever produced the WebAssembly, so it has a smaller footprint than an entire compiler set.
+The old Alchemy/FlasCC/CrossBridge compiler for C/C++ is an existence proof for the possibility of running C-like code in AVM2. In contrast, here the frontend compilers are done for us from whatever produced the WebAssembly, so `wasm2swf` has a smaller footprint than an entire compiler set.
 
 ### Wasm and AVM2 similaries
 
@@ -26,9 +26,9 @@ Linear memory maps well to use of a ByteArray linked up to "domain memory", with
 
 Arguments and locals go into a register-like list with compile-time constant indexes on the get/set opcodes, which is very similar. (The indexes must be offset by one, as index 0 holds the ActionScript `this` argument.)
 
-Globals and function imports can live as indexed property slots on the module instance; local function references as indexed methods for direct calls. The dynamic function table for indirect calls can be an array, itself living as a property on the module.
+Globals and function imports can live as property slots on the module instance; local function references as methods for direct calls. The dynamic function table for indirect calls can be an array, itself living as a property on the module.
 
-I'm not sure if the indexed properties and methods will be more performant than the emscripten/wasm2js-style use of a scope closure, as long as the names are bound at compile time. Could try it both ways maybe.
+I'm not sure if the properties and methods will be more performant than the emscripten/wasm2js-style use of a scope closure, as long as the names are bound at compile time. Could try it both ways maybe.
 
 ### Impedence mismatches
 
@@ -42,7 +42,7 @@ AVM2 has separate `int` and `uint` types for 32-bit values; we use integer prima
 
 Branches are emitted with byte offsets in the bytecode stream, so need to be translated from labels on the bytecode emitter. Labels must be emitted too, at least for backwards branches. There may be some improvements left to go in label handling.
 
-## Binaryen details
+## Translation etails
 
 binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions so they can be transformed to ActionScript bytecode ops. I stand on the shoulders of giants.
 
@@ -50,25 +50,39 @@ Most of the same passes from binaryen's wasm2js tool are used here. The wasm2js 
 
 Some additional transformations are made during the tree walk/translation phase within wasm2swf.
 
+### Internals
+
+The `WebAssembly.Instance` class analogue holds the internals of a compiled module in private namespace properties and methods:
+* the memory `ByteArray` lives on a property named `wasm2swf$memory`
+* the function table `Array` lives on a property named `wasm2swf$table`
+* imports live in properties named `import$modulename$basename`
+* functions live in methods named `func$symbolname`; for imported functions a wrapper here with proper type annotations calls the imported symbol
+* global vars live in properties named `global$symbolname`
+* exports are attached to props on a public `Object` property named `exports`
+
+Currently, `wasm2swf`/`wasm2js`-specific imports need to be manually set up on the imports object passed to the constructor. These will be set up internally in a bit.
+
+Memory and function tables are not yet initialized, so beware only simple functions work so far!
+
 ### Optimizations
 
 Patterns to match:
 * increment_i, decrement_i opcodes to replace add/subtract by 1/-1
 * inc_local / dec_local to replace get-inc-set
-* if + condition -> if-not-condition
+* br_if + condition -> if-not-condition
 * ??
 
 ## Todo
 
 * write full bytecode for constructor
-    * set the application domain memory
+    * set the application domain memory (either once or on export stubs)
     * memory data segments
     * function table segments (needs upstream work in binaryen's C and JS APIs)
-* write bytecode for import stubs (or else call imports as lexical lookups?)
+    * call the start function
 * write bytecode for the scratch helper functions
-* export the class for the module
+* clean up special wasm2js-related imports (setTempRet0, getTempRet0, etc)
+* proper namespacing/classes for the API
 * write some kind of test harness in AS3 + JS + HTML
-* hope things validate
 * compress with lzma
 * bash head against wall
 * don't give up!
@@ -77,35 +91,10 @@ Patterns to match:
 
 Comparing some old code compiled with CrossBridge, noticed some things there:
 * use of locals is similar. they get initialized to 0 at beginning of function.
-* stack pointer is in an ESP variable in the target namespace scope chain.
+* stack pointer is in an ESP variable in the scope chain.
 * add/subtract are done with the generic opcodes, then convert_i, rather than using add_i/subtract_i. weird!
-* calls are done with findpropstrict+callprop/callpropvoid, by name reference, not method invocation.
 * function symbols start with F, eg Fmemcpy
 * function args and return values are _not_ mapped directly to function args and return values. what? they appear to be passed through stack memory for args, and variables in a surrounding scope for return values: eax and edx. :D
-
-ESP read:
-
-```
-        getlex          com.brionv.ogvlibs:ESP
-        convert_i
-        setlocal1
-```
-
-ESP write:
-
-```
-        getlocal3
-        findproperty    com.brionv.ogvlibs:ESP
-        swap
-        setproperty     com.brionv.ogvlibs:ESP
-```
-
-Calls:
-
-```
-        findpropstrict  com.brionv.ogvlibs:Fmemcpy
-        callpropvoid    com.brionv.ogvlibs:Fmemcpy (0)
-```
 
 ## ActionScript API
 
