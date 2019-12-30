@@ -53,8 +53,8 @@ Some additional transformations are made during the tree walk/translation phase 
 ### Internals
 
 The `WebAssembly.Instance` class analogue holds the internals of a compiled module in private namespace properties and methods:
-* the memory `ByteArray` lives on a property named `wasm2swf$memory`
-* the function table `Array` lives on a property named `wasm2swf$table`
+* the memory `ByteArray` lives on a property named `wasm$memory`
+* the function table `Array` lives on a property named `wasm$table`
 * imports live in properties named `import$modulename$basename`
 * functions live in methods named `func$symbolname`; for imported functions a wrapper here with proper type annotations calls the imported symbol
 * global vars live in properties named `global$symbolname`

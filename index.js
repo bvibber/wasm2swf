@@ -321,7 +321,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitCallIndirect: (info) => {
             builder.getlocal_0(); // this argument
-            builder.getproperty(abc.qname('privatens', abc.string('wasm2swf$table')))
+            builder.getproperty(abc.qname('privatens', abc.string('wasm$table')))
             traverse(info.target);
             info.operands.forEach(traverse);
             let pubset = abc.ns_set([pubns]);
@@ -546,7 +546,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 case binaryen.ClzInt32:
                     builder.getlocal_0(); // 'this'
                     traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, abc.string('wasm2swf_clz32')), 1);
+                    builder.callproperty(abc.qname(privatens, abc.string('wasm$clz32')), 1);
                     builder.convert_i();
                     break;
                 case binaryen.CtzInt32:
@@ -972,12 +972,12 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 case binaryen.MemoryGrow:
                     builder.getlocal_0(); // 'this'
                     traverse(info.operands[0]);
-                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2swf_memory_grow')), 1);
+                    builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_grow')), 1);
                     builder.convert_i();
                     break;
                 case binaryen.MemorySize:
                     builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2swf_memory_size')), 0);
+                    builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_size')), 0);
                     builder.convert_i();
                     break;
                 default:
@@ -1127,11 +1127,11 @@ function convertModule(mod) {
         abc.qname(pubns, abc.string('Object'))
     );
     addGlobal(
-        abc.qname(privatens, abc.string('wasm2swf$memory')),
+        abc.qname(privatens, abc.string('wasm$memory')),
         abc.qname(flashutilsns, abc.string('ByteArray'))
     );
     addGlobal(
-        abc.qname(privatens, abc.string('wasm2swf$table')),
+        abc.qname(privatens, abc.string('wasm$table')),
         abc.qname(pubns, abc.string('Array'))
     );
 
@@ -1152,11 +1152,6 @@ function convertModule(mod) {
         addImport(store, params, binaryen.void);
         addImport(load, type_v, ret);
     }
-
-    addImport('wasm2swf_memory_size', type_v, binaryen.i32);
-    addImport('wasm2swf_memory_grow', type_i, binaryen.i32);
-
-    addImport('wasm2swf_clz32', type_i, binaryen.i32);
 
     addScratch(
         'wasm2js_scratch_store_i32',
@@ -1209,6 +1204,112 @@ function convertModule(mod) {
         convertFunction(func, abc, instanceTraits, addGlobal);
     }
 
+    // Internal functions o' doom
+    {
+        // wasm$clz32 helper
+        let intType = abc.qname(pubns, abc.string('int'));
+        let method = abc.method({
+            name: abc.string('clz32'),
+            return_type: intType,
+            param_types: [intType]
+        });
+
+        let op = abc.methodBuilder();
+        // var n:int = 32;
+        op.pushbyte(32);
+        op.setlocal_2();
+
+        for (let bits of [16, 8, 4, 2]) {
+            // var y:int = x >> bits;
+            op.getlocal_1();
+            op.pushbyte(bits);
+            op.rshift();
+            op.dup();
+            op.setlocal_3();
+            // if (y) {
+            let endif = new Label();
+            op.iffalse(endif);
+            //   n -= bits;
+            op.getlocal_2();
+            op.pushbyte(bits);
+            op.subtract_i();
+            op.setlocal_2();
+            //   x = y;
+            op.getlocal_3();
+            op.setlocal_1();
+            op.label(endif);
+            // }
+        }
+
+        // y = x >> 1
+        op.getlocal_1();
+        op.pushbyte(1);
+        op.rshift();
+        op.dup();
+        op.setlocal_3();
+        // if (y) {
+        let endif = new Label();
+        op.iffalse(endif);
+        // return n - 2
+        op.getlocal_2();
+        op.pushbyte(2);
+        op.subtract_i();
+        op.returnvalue();
+        op.label(endif);
+        // }
+        // return n - x
+        op.getlocal_2();
+        op.getlocal_1();
+        op.subtract_i();
+        op.returnvalue();
+
+        let body = abc.methodBody({
+            method,
+            local_count: 4,
+            init_scope_depth: 3,
+            max_scope_depth: 3,
+            code: op.toBytes(),
+        });
+
+        instanceTraits.push(abc.trait({
+            name: abc.qname(privatens, abc.string('wasm$clz32')),
+            kind: Trait.Method,
+            method
+        }));
+    }
+    {
+        // wasm$memory_size helper
+        let intType = abc.qname(pubns, abc.string('int'));
+        let method = abc.method({
+            name: abc.string('memory_size'),
+            return_type: intType,
+            param_types: []
+        });
+
+        let op = abc.methodBuilder();
+        // this.wasm$memory.length >>> 16
+        op.getlocal_0();
+        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
+        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.pushbyte(16);
+        op.urshift();
+        op.returnvalue();
+
+        let body = abc.methodBody({
+            method,
+            local_count: 1,
+            init_scope_depth: 3,
+            max_scope_depth: 3,
+            code: op.toBytes(),
+        });
+
+        instanceTraits.push(abc.trait({
+            name: abc.qname(privatens, abc.string('wasm$memory_size')),
+            kind: Trait.Method,
+            method
+        }));
+    }
+
     // Class static initializer
     let cinit = abc.method({
         name: abc.string('wasm2swf_cinit'),
@@ -1247,7 +1348,7 @@ function convertModule(mod) {
     iinitBody.dup();
     iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
-    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm2swf$memory')));
+    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory')));
 
     // Initialize the table
     iinitBody.getlocal_0();
@@ -1255,7 +1356,7 @@ function convertModule(mod) {
     iinitBody.construct(0);
     // @fixme implement the initializer segments
     // needs accessors added to binaryen.js
-    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm2swf$table')));
+    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$table')));
 
     // Initialize the import function slots
     for (let info of imports) {
