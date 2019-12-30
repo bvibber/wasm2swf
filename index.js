@@ -1278,6 +1278,54 @@ function convertModule(mod) {
         }));
     }
     {
+        // wasm$memory_grow helper
+        let intType = abc.qname(pubns, abc.string('int'));
+        let method = abc.method({
+            name: abc.string('memory_grow'),
+            return_type: intType,
+            param_types: [intType]
+        });
+
+        let op = abc.methodBuilder();
+        // var old:int = this.wasm$memory.length >>> 16;
+        op.getlocal_0();
+        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
+        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.pushbyte(16);
+        op.urshift();
+        op.convert_i();
+        op.setlocal_2();
+
+        // @fixme enforce maximums, etc.
+        // this.wasm$memory.length = (arg1 + old) << 16;
+        op.getlocal_0();
+        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
+        op.getlocal_1();
+        op.getlocal_2();
+        op.add_i();
+        op.pushbyte(16);
+        op.lshift();
+        op.setproperty(abc.qname(pubns, abc.string('length')));
+
+        // return old;
+        op.getlocal_2();
+        op.returnvalue();
+
+        let body = abc.methodBody({
+            method,
+            local_count: 3,
+            init_scope_depth: 3,
+            max_scope_depth: 3,
+            code: op.toBytes(),
+        });
+
+        instanceTraits.push(abc.trait({
+            name: abc.qname(privatens, abc.string('wasm$memory_grow')),
+            kind: Trait.Method,
+            method
+        }));
+    }
+    {
         // wasm$memory_size helper
         let intType = abc.qname(pubns, abc.string('int'));
         let method = abc.method({
@@ -1293,6 +1341,7 @@ function convertModule(mod) {
         op.getproperty(abc.qname(pubns, abc.string('length')));
         op.pushbyte(16);
         op.urshift();
+        op.convert_i();
         op.returnvalue();
 
         let body = abc.methodBody({
