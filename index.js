@@ -1099,7 +1099,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
-    let wasmns = abc.namespace(Namespace.Namespace, abc.string('WebAssembly'));
     let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
     let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));
 
@@ -1301,7 +1300,7 @@ function convertModule(mod) {
 
     // @fixme maybe add class and instance data in the same call?
     let nameObject = abc.qname(pubns, abc.string('Object'));
-    let className = abc.qname(wasmns, abc.string('Instance'));
+    let className = abc.qname(pubns, abc.string('Instance'));
     abc.instance({
         name: className, // @todo make the namespace specifiable
         super_name: nameObject,
@@ -1379,6 +1378,6 @@ let bytes = convertModule(mod);
 
 fs.writeFileSync('output.abc', bytes);
 
-let swf = generateSWF(['WebAssembly.Instance'], bytes);
+let swf = generateSWF(['Instance'], bytes);
 
 fs.writeFileSync('output.swf', swf);
