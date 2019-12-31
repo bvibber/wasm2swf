@@ -13,35 +13,44 @@ package {
             callback = loaderInfo.parameters.callback;
             ExternalInterface.addCallback('run', run);
 
-            loader = new ClassLoader();
-            loader.addEventListener(ClassLoader.LOAD_ERROR,loadErrorHandler);
-            loader.addEventListener(ClassLoader.CLASS_LOADED,classLoadedHandler);
-            loader.load("module.swf");
+            try {
+                loader = new ClassLoader();
+                loader.addEventListener(ClassLoader.LOAD_ERROR, loadErrorHandler);
+                loader.addEventListener(ClassLoader.CLASS_LOADED, classLoadedHandler);
+                loader.load("module.swf");
+            } catch (e:Error) {
+                ExternalInterface.call(callback, false, 'exception');
+            }
+            //ExternalInterface.call(callback, true);
         }
 
         private function loadErrorHandler(e:Event):void {
-            ExternalInterface.call(callback + '()', false);
+            ExternalInterface.call(callback, false, 'load error');
         }
 
         private function classLoadedHandler(e:Event):void {
-            var Instance:Class = loader.getClass("Instance");
-            instance = new Instance({
-                env: {
-                    getTempRet0:function():int {
-                        return tempRet0;
-                    },
-                    setTempRet0:function(val:int):void {
-                        tempRet0 = val;
+            try {
+                var Instance:Class = loader.getClass("Instance");
+                instance = new Instance({
+                    env: {
+                        getTempRet0:function():int {
+                            return tempRet0;
+                        },
+                        setTempRet0:function(val:int):void {
+                            tempRet0 = val;
+                        }
                     }
-                }
-            });
+                });
 
-            ExternalInterface.call(callback + '()', true);
+                ExternalInterface.call(callback, true);
+            } catch (e:Error) {
+                ExternalInterface.call(callback, false, 'instantiation error');
+            }
         }
 
         private function run(func:String, args:Array):* {
             try {
-                return instance[func].apply(instance, args);
+                return instance.exports[func].apply(instance, args);
             } catch (e:Error) {
                 return 'error: ' + e;
             }
