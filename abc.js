@@ -872,31 +872,29 @@ class MethodBuilder extends ABCBuilder {
     fixup(label) {
         // Add a placeholder for a relative jump to the future
         this.s24(0);
-        this.fixups.push({
-            addr: this.offset(),
+        let fixup = {
+            offset: this.offset() - 3, // location of the s24 value
+            anchor: this.offset(),   // position from which the offset will be calculated
             label
-        });
+        };
+        this.fixups.push(fixup);
+        return fixup;
     }
 
     relativeAddress(label) {
         label.used = true;
-        if (this.addresses.has(label)) {
-            let addr = this.offset() + 3;
-            this.s24(this.addresses.get(label) - addr);
-        } else {
-            this.fixup(label);
-        }
+        return this.fixup(label);
     }
 
     applyFixups() {
-        for (let {addr, label} of this.fixups) {
+        for (let {offset, anchor, label} of this.fixups) {
             if (!this.addresses.has(label)) {
                 throw new Error('fixup to nonexistent label ' + label);
             }
-            let rel = this.addresses.get(label) - addr;
-            this.stream[addr - 3] = rel & 0xff;
-            this.stream[addr - 2] = (rel >> 8) & 0xff;
-            this.stream[addr - 1] = (rel >> 16) & 0xff;
+            let rel = this.addresses.get(label) - anchor;
+            this.stream[offset] = rel & 0xff;
+            this.stream[offset + 1] = (rel >> 8) & 0xff;
+            this.stream[offset + 2] = (rel >> 16) & 0xff;
         }
         this.fixups = [];
     }
@@ -1250,11 +1248,17 @@ class MethodBuilder extends ABCBuilder {
 
     lookupswitch(default_label, case_labels) {
         this.log('lookupswitch', default_label.name, case_labels.length, case_labels.map((x) => x.name).join(' '));
+        let anchor = this.offset();
         this.u8(0x1b);
-        this.relativeAddress(default_label);
-        this.u30(case_labels.length);
+        let fixups = [];
+        fixups.push(this.relativeAddress(default_label));
+        this.u30(case_labels.length - 1);
         for (let label of case_labels) {
-            this.relativeAddress(label);
+            fixups.push(this.relativeAddress(label));
+        }
+        // Re-anchor all those fixups to the end of the whole instruction.
+        for (let fixup of fixups) {
+            fixup.anchor = anchor;
         }
     }
 

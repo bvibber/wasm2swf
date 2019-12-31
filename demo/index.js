@@ -83,3 +83,11 @@ document.getElementById('filter_line').addEventListener('click', function() {
     swf.run('free', [dest]);
     log('free(' + dest + ')');
 });
+
+setupDemo('palette_16color', [
+    [0],
+    [1],
+    [2],
+    [15],
+    [16],
+]);

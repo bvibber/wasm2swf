@@ -37,3 +37,28 @@ void filter_line(uint8_t* dest, const uint8_t* src, int32_t len) {
         dest[i] = src[i] - src[i - 1];
     }
 }
+
+// use this to keep from the switch turning into a table lookup
+volatile static int32_t x = 0;
+
+int32_t palette_16color(int32_t color) {
+    switch (color) {
+        case 0: return 0x000000 + x;
+        case 1: return 0x000080 + x;
+        case 2: return 0x008000 + x;
+        case 3: return 0x008080 + x;
+        case 4: return 0x800000 + x;
+        case 5: return 0x800080 + x;
+        case 6: return 0x808000 + x;
+        case 7: return 0x808080 + x;
+        case 8: return 0xc0c0c0 + x;
+        case 9: return 0x0000ff + x;
+        case 10: return 0x00ff00 + x;
+        case 11: return 0x00ffff + x;
+        case 12: return 0xff0000 + x;
+        case 13: return 0xff00ff + x;
+        case 14: return 0xffff00 + x;
+        case 15: return 0xffffff + x;
+        default: return -1 + x;
+    }
+}
