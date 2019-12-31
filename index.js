@@ -1387,6 +1387,10 @@ function convertModule(mod) {
     iinitBody.constructsuper(0);
 
     // Initialize the memory
+    //let flashsystemns = abc.namespace(Namespace.Namespace, abc.string('flash.system'));
+    //iinitBody.getlex(abc.qname(flashsystemns, abc.string('ApplicationDomain')));
+    //iinitBody.getproperty(abc.qname(pubns, abc.string('currentDomain')));
+
     iinitBody.getlocal_0();
     iinitBody.getlex(abc.qname(flashutilsns, abc.string('ByteArray')));
     iinitBody.construct(0);
@@ -1396,7 +1400,11 @@ function convertModule(mod) {
     iinitBody.dup();
     iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
-    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory')));
+
+    //iinitBody.dup();
+    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
+
+    //iinitBody.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
 
     // Initialize the table
     iinitBody.getlocal_0();
