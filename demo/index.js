@@ -5,8 +5,12 @@ function log(str) {
     document.getElementById('log').appendChild(p);
 }
 
-function readyCallback() {
-    log('ready!');
+function readyCallback(ok) {
+    if (ok) {
+        log('ready!');
+    } else {
+        log('Flash reported error loading module.swf.');
+    }
 }
 
 function param(name, value) {

@@ -11,7 +11,7 @@ const {
 } = require('./abc');
 const {SWFFileBuilder} = require('./swf');
 
-let infile, outfile;
+let infile, outfile = 'output.swf';
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
@@ -1560,8 +1560,8 @@ let wasm = fs.readFileSync(infile);
 let mod = binaryen.readBinary(wasm);
 let bytes = convertModule(mod);
 
-fs.writeFileSync('output.abc', bytes);
+//fs.writeFileSync('output.abc', bytes);
 
 let swf = generateSWF(['Instance'], bytes);
 
-fs.writeFileSync('output.swf', swf);
+fs.writeFileSync(outfile, swf);
