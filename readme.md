@@ -42,7 +42,7 @@ AVM2 has separate `int` and `uint` types for 32-bit values; we use integer prima
 
 Branches are emitted with byte offsets in the bytecode stream, so need to be translated from labels on the bytecode emitter. Labels must be emitted too, at least for backwards branches. There may be some improvements left to go in label handling.
 
-## Translation etails
+## Translation details
 
 binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions so they can be transformed to ActionScript bytecode ops. I stand on the shoulders of giants.
 
@@ -98,9 +98,38 @@ Comparing some old code compiled with CrossBridge, noticed some things there:
 
 ## ActionScript API
 
-The intent is to provide a similar API to WebAssembly's JS API,
-but with precompiled modules that can be used to instantiate from rather than taking ArrayBuffers or input streams.
+The intent is to provide a similar API to WebAssembly's JS API, but with precompiled modules that can be used to instantiate from rather than taking buffers or input streams.
 
-Have not yet decided if it's necessary to mess around with sharing an application domain with a linked app, or if it's best to use Loader to separate stuff.
+An `Instance` is instantiated with the two-level imports object. Currently this must include an `env` property with `setTempRet0` and `getTempRet0` functions for managing the 64-bit return value high word, and may need some other bits to work. These will be hidden away as internal implementation details later.
 
+```
+var tempRet0:int = 0;
+var instance:Object instance = new Instance({
+    env: {
+        getTempRet0:function():int {
+            return tempRet0;
+        },
+        setTempRet0:function(val:int):void {
+            tempRet0 = val;
+        }
+    }
+});
+```
 
+Exported functions, memory and function tables are available through the `exports` object property:
+
+```
+var result:int = instance.exports.sample_add_i32(1920, 100);
+```
+
+### Runtime module loading
+
+The current demo has a frontend `demo.swf` file compiled from ActionScript 3, which loads the `wasm2swf` output `module.swf` at runtime and instantiates it. The `module.swf` provides a `Sprite` subclass for the loader to instantiate, then you can fetch the `Instance` class manually from the loader.
+
+This has a couple advantages over static linking: you can run different modules at runtime as needed, and it establishes a separate `ApplicationDomain` for each module, meaning its use of domain memory won't interfere with the parent script and vice versa.
+
+### Non-browser usage
+
+To efficiently use linear memory, domain memory opcodes are used for loads and stores. But configuring the `ByteArray` to use for domain memory requires use of `flash.system.ApplicationDomain` which isn't available in `avmshell`.
+
+In theory it could work with the `redtamarin` shell, customized to use its alternate `shell.Domain` API, but it crashes when I test it.
