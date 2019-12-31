@@ -63,3 +63,16 @@ setupDemo('mandelbrot', [
 ]);
 
 
+document.getElementById('filter_line').addEventListener('click', function() {
+    var len = 16;
+    var dest = 10240;
+    var src = 20480;
+
+    swf.writeBytes(src, [20, 30, 39, 47,  53, 58, 62, 65,  67, 68, 68, 67,  65, 62, 58, 53]);
+    log(swf.readBytes(src, len));
+
+    log('filter_line(' + [dest, src, len].join(', ') + ')');
+    swf.run('filter_line', [dest, src, len]);
+
+    log(swf.readBytes(dest, len));
+});
