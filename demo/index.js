@@ -76,10 +76,10 @@ document.getElementById('filter_line').addEventListener('click', function() {
     log('filter_line(' + [dest, src, len].join(', ') + ')');
     swf.run('filter_line', [dest, src, len]);
 
+    log(swf.readBytes(dest, len));
+
     swf.run('free', [src]);
     log('free(' + src + ')');
     swf.run('free', [dest]);
     log('free(' + dest + ')');
-
-    log(swf.readBytes(dest, len));
 });
