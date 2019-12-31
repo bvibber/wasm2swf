@@ -1099,6 +1099,14 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
 }
 
+function binaryString(data) {
+    let s = '';
+    for (let byte of new Uint8Array(data)) {
+        s += String.fromCharCode(byte);
+    }
+    return s;
+}
+
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
@@ -1361,6 +1369,76 @@ function convertModule(mod) {
             method
         }));
     }
+    {
+        // wasm$memory_init helper
+        abc.qname(privatens, 'wasm$memory_init')
+
+        let voidType = abc.qname(pubns, abc.string('void'));
+        let intType = abc.qname(pubns, abc.string('int'));
+        let stringType = abc.qname(pubns, abc.string('String'));
+        let method = abc.method({
+            name: abc.string('memory_init'),
+            return_type: voidType,
+            param_types: [intType, stringType]
+        });
+
+        let op = abc.methodBuilder();
+        // local1 = byteOffset
+        // local2 = str
+
+        // local3 = i = 0
+        op.pushbyte(0);
+        op.setlocal_3();
+
+        // local4 = len = str.length
+        op.getlocal_2();
+        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.convert_i();
+        op.setlocal(4);
+
+        let loopStart = new Label();
+        let loopEnd = new Label();
+        op.label(loopStart);
+
+        // if not i < len, jump to loopEnd
+        op.getlocal_3();
+        op.getlocal(4);
+        op.ifnlt(loopEnd);
+
+        // si8(str.charCodeAt(i), byteOffset + i)
+        op.getlocal_2(); // str
+        op.getlocal_3(); // i
+        op.callproperty(abc.qname(pubns, abc.string('charCodeAt')), 1);
+        op.convert_i();
+        op.getlocal_1();
+        op.getlocal_3();
+        op.add_i();
+        op.si8();
+
+        // i++
+        op.inclocal_i(3);
+
+        // Back to start of loop
+        op.jump(loopStart);
+
+        op.label(loopEnd);
+
+        op.returnvoid();
+
+        abc.methodBody({
+            method,
+            local_count: 5,
+            init_scope_depth: 3,
+            max_scope_depth: 3,
+            code: op.toBytes(),
+        });
+
+        instanceTraits.push(abc.trait({
+            name: abc.qname(privatens, abc.string('wasm$memory_init')),
+            kind: Trait.Method,
+            method
+        }));
+    }
 
     // Class static initializer
     let cinit = abc.method({
@@ -1410,6 +1488,15 @@ function convertModule(mod) {
     iinitBody.getlocal_0();
     iinitBody.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
     iinitBody.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
+
+    for (let i = 0; i < mod.getNumMemorySegments(); i++) {
+        let segment = mod.getMemorySegmentInfoByIndex(i);
+
+        iinitBody.getlocal_0();
+        iinitBody.pushint(segment.byteOffset);
+        iinitBody.pushstring(abc.string(binaryString(segment.data)));
+        iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
+    }
 
     // Initialize the table
     iinitBody.getlocal_0();
