@@ -364,7 +364,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 let left = binaryen.getExpressionInfo(value.left);
                 let right = binaryen.getExpressionInfo(value.right);
                 if (left.id == binaryen.LocalGetId &&
-                    left.index == i &&
+                    left.index == info.index &&
                     right.id == binaryen.ConstId
                 ) {
                     if (right.value === 1) {
