@@ -62,7 +62,7 @@ The `WebAssembly.Instance` class analogue holds the internals of a compiled modu
 
 Currently, `wasm2swf`/`wasm2js`-specific imports need to be manually set up on the imports object passed to the constructor. These will be set up internally in a bit.
 
-Memory and function tables are not yet initialized, so beware only simple functions work so far!
+Static constructors, globals and function tables are not yet initialized, so beware only simple functions work so far!
 
 ### Optimizations
 
