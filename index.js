@@ -432,7 +432,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             traverse(info.ptr);
 
             if (info.offset > 0) {
-                if (info.offset <= 255) {
+                if (info.offset >= -128 && info.offset <= 127) {
                     builder.pushbyte(info.offset);
                 } else if (info.offset >= -32768 && info.offset <= 32767) {
                     builder.pushshort(info.offset);
@@ -478,7 +478,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
             traverse(info.ptr);
             if (info.offset > 0) {
-                if (info.offset <= 255) {
+                if (info.offset >= -128 && info.offset <= 127) {
                     builder.pushbyte(info.offset);
                 } else if (info.offset >= -32768 && info.offset <= 32767) {
                     builder.pushshort(info.offset);
@@ -522,7 +522,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         visitConst: (info) => {
             switch (info.type) {
                 case binaryen.i32:
-                    if (info.value >= 0 && info.value <= 255) {
+                    if (info.value >= -128 && info.value <= 127) {
                         builder.pushbyte(info.value);
                     } else if (info.value >= -32768 && info.value <= 32767) {
                         builder.pushshort(info.value);
