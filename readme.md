@@ -67,38 +67,39 @@ Memory and function tables are not yet initialized, so beware only simple functi
 ### Optimizations
 
 Patterns to match:
-* increment_i, decrement_i opcodes to replace add/subtract by 1/-1
-* inc_local / dec_local to replace get-inc-set
-* br_if + condition -> if-not-condition
+* `increment_i`, `decrement_i` opcodes to replace add/subtract by 1/-1
+* `inc_local` / `dec_local` to replace get-inc-set
+* `br_if` + condition -> if-not-condition
 * ??
 
 ## Todo
 
-* write full bytecode for constructor
-    * set the application domain memory (either once or on export stubs)
-    * memory data segments
-    * function table segments (needs upstream work in binaryen's C and JS APIs)
+* finish the condition optimizations for `br_if`
+* finish the constructor
+    * init values for globals
+    * init function table segments (needs upstream work in binaryen's C and JS APIs)
     * call the start function
 * write bytecode for the scratch helper functions
-* clean up special wasm2js-related imports (setTempRet0, getTempRet0, etc)
-* proper namespacing/classes for the API
-* write some kind of test harness in AS3 + JS + HTML
+* clean up special wasm2js-related imports (`setTempRet0`, `getTempRet0`, scratch helpers)
 * compress with lzma
-* bash head against wall
-* don't give up!
+* proper namespacing/classes for the API
+* test bigger codebases like theora, vpx
+* `.swc` output for static linking
 
-## Comparisons with FlasCC/CrossBridge
+## Comparisons with Alchemy/FlasCC/CrossBridge
 
 Comparing some old code compiled with CrossBridge, noticed some things there:
 * use of locals is similar. they get initialized to 0 at beginning of function.
-* stack pointer is in an ESP variable in the scope chain.
-* add/subtract are done with the generic opcodes, then convert_i, rather than using add_i/subtract_i. weird!
-* function symbols start with F, eg Fmemcpy
-* function args and return values are _not_ mapped directly to function args and return values. what? they appear to be passed through stack memory for args, and variables in a surrounding scope for return values: eax and edx. :D
+* stack pointer is in an `ESP` var, similar to our use of a wasm global
+* integer `add`/`subtract` are done with the generic opcodes, then `convert_i`, rather than using `add_i`/`subtract_i`. weird!
+* function symbols start with `F`, eg `Fmemcpy`
+* function args and return values are _not_ mapped directly to function args and return values. what? they appear to be passed through stack memory for args, and `eax` and `edx` vars similar to our use of a `tempRet0` for 64-bit high words, but for both words
 
 ## ActionScript API
 
 The intent is to provide a similar API to WebAssembly's JS API, but with precompiled modules that can be used to instantiate from rather than taking buffers or input streams.
+
+Currently namespacing is off, it'll be cleaned up soon.
 
 An `Instance` is instantiated with the two-level imports object. Currently this must include an `env` property with `setTempRet0` and `getTempRet0` functions for managing the 64-bit return value high word, and may need some other bits to work. These will be hidden away as internal implementation details later.
 
