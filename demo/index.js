@@ -39,9 +39,9 @@ function setupDemo(func, argSets, tempRet) {
         argSets.forEach(function(args) {
             try {
                 var ret = swf.run(func, args);
-                var msg = 'func(' + args.join(', ') + ') -> ' + ret;
+                var msg = func + '(' + args.join(', ') + ') -> ' + ret;
                 if (tempRet) {
-                    msg += ', ' + swf.run('getTempRet0', []);
+                    msg += ', ' + swf.getTempRet0();
                 }
                 log(msg);
             } catch (e) {

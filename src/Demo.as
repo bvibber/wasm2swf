@@ -12,6 +12,7 @@ package {
         public function Demo() {
             callback = loaderInfo.parameters.callback;
             ExternalInterface.addCallback('run', run);
+            ExternalInterface.addCallback('getTempRet0', getTempRet0);
 
             try {
                 loader = new ClassLoader();
@@ -54,6 +55,10 @@ package {
             } catch (e:Error) {
                 return 'error: ' + e;
             }
+        }
+
+        private function getTempRet0():int {
+            return tempRet0;
         }
     }
 }
