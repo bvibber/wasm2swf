@@ -11,7 +11,15 @@ const {
 } = require('./abc');
 const {SWFFileBuilder} = require('./swf');
 
-let infile, outfile = 'output.swf';
+function help() {
+    console.error(`wasm2swf --sprite -o outfile.swf infile.wasm\n`);
+    console.error(`  -o outfile.swf save output as a loadable .swf movie`);
+    console.error(`  -o outfile.abc save output as raw .abc bytecode`);
+    console.error(`  --sprite       includes a stub Sprite class for Flash timeline`);
+    console.error(`\n`);
+}
+
+let infile, outfile;
 let sprite = false;
 
 let args = process.argv.slice(2);
@@ -26,7 +34,7 @@ while (args.length > 0) {
             sprite = true;
             break;
         case '--help':
-            console.log(`wasm2swf [--sprite] -o outfile.swf infile.wasm\n`);
+            help();
             process.exit(0);
             break;
         default:
@@ -36,9 +44,19 @@ while (args.length > 0) {
 
 if (!infile) {
     console.error(`Must provide an input .wasm file!\n`);
+    help();
     process.exit(1);
 }
-
+if (!outfile) {
+    console.error(`Must provide an output .swf or .abc file!\n`);
+    help();
+    process.exit(1);
+}
+if (!(outfile.endsWith('.swf') || outfile.endsWith('.abc'))) {
+    console.error(`Output file must have .abc or .swf extension.\n`);
+    help();
+    process.exit(1);
+}
 // Can we get this list from binaryen?
 let ids = [
     'Invalid',
