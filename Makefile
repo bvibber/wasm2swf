@@ -56,8 +56,8 @@ $(FLEXSDK_PLAYERGLOBAL_DEP) : $(FLEXSDK_BASE_DEP)
 	mkdir -p "$(PLAYERGLOBAL_DIR)"
 	curl -o "$(PLAYERGLOBAL_DIR)/playerglobal.swc" "$(PLAYERGLOBAL_URL)"
 
-demo/module.swf : sample/sample.wasm
-	node index.js -o demo/module.swf sample/sample.wasm
+demo/module.swf : sample/sample.wasm index.js swf.js abc.js
+	node index.js --sprite -o demo/module.swf sample/sample.wasm
 
 sample/sample.wasm :
 	(cd sample && make)

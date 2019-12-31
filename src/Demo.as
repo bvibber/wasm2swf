@@ -17,7 +17,7 @@ package {
                 loader = new ClassLoader();
                 loader.addEventListener(ClassLoader.LOAD_ERROR, loadErrorHandler);
                 loader.addEventListener(ClassLoader.CLASS_LOADED, classLoadedHandler);
-                loader.load("module.swf");
+                loader.load("module.swf" + '?' + Math.random());
             } catch (e:Error) {
                 ExternalInterface.call(callback, false, 'exception');
             }

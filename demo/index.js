@@ -21,12 +21,12 @@ function param(name, value) {
 }
 function flashObject(url, readyCallback) {
     var obj = document.createElement('object');
+    obj.appendChild(param('FlashVars', 'callback=' + readyCallback));
+    obj.appendChild(param('AllowScriptAccess', 'sameDomain'));
     obj.width = 10;
     obj.height = 10;
     obj.type = 'application/x-shockwave-flash';
-    obj.data = url;
-    obj.appendChild(param('FlashVars', 'callback=' + readyCallback));
-    obj.appendChild(param('allowscriptaccess', 'always'));
+    obj.data = url + '?' + Math.random();
     return obj;
 }
 
@@ -37,13 +37,16 @@ document.body.appendChild(swf);
 function setupDemo(func, argSets, tempRet) {
     document.getElementById(func).addEventListener('click', function() {
         argSets.forEach(function(args) {
-            console.log(swf.run, func, args);
-            var ret = swf.run(func, args);
-            var msg = 'func(' + args.join(', ') + ') -> ' + ret;
-            if (tempRet) {
-                msg += ', ' + swf.run('getTempRet0');
+            try {
+                var ret = swf.run(func, args);
+                var msg = 'func(' + args.join(', ') + ') -> ' + ret;
+                if (tempRet) {
+                    msg += ', ' + swf.run('getTempRet0', []);
+                }
+                log(msg);
+            } catch (e) {
+                log('error: ' + e);
             }
-            log(msg);
         });
     });
 }

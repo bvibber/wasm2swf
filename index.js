@@ -12,6 +12,7 @@ const {
 const {SWFFileBuilder} = require('./swf');
 
 let infile, outfile = 'output.swf';
+let sprite = false;
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
@@ -21,8 +22,11 @@ while (args.length > 0) {
         case '--output':
             outfile = args.shift();
             break;
+        case '--sprite':
+            sprite = true;
+            break;
         case '--help':
-            console.log(`wasm2swf -o outfile.swf infile.wasm\n`);
+            console.log(`wasm2swf [--sprite] -o outfile.swf infile.wasm\n`);
             process.exit(0);
             break;
         default:
@@ -1500,6 +1504,8 @@ function convertModule(mod) {
         param_types: [],
     });
     let initBody = abc.methodBuilder();
+
+    // Initialize the Instance class
     initBody.getlocal_0(); // 'this' for pushscope
     initBody.pushscope();
     initBody.findpropstrict(className); // find where to store the class property soon...
@@ -1509,22 +1515,107 @@ function convertModule(mod) {
     initBody.newclass(classi);
     initBody.popscope();
     initBody.initproperty(className);
-    initBody.returnvoid();
-    abc.methodBody({
-        method: init,
-        local_count: 1,
-        init_scope_depth: 0,
-        max_scope_depth: 2,
-        code: initBody.toBytes(),
-    });
-    let traits = [];
-    traits.push(abc.trait({
+
+    let scriptTraits = [];
+    scriptTraits.push(abc.trait({
         name: className,
         kind: Trait.Class,
         slot_id: 0,
         classi: classi,
     }));
-    abc.script(init, traits);
+
+    if (sprite) {
+        // We seem to need a Sprite to load a swf
+        let flashdisplayns = abc.namespace(Namespace.Namespace, abc.string('flash.display'));
+        let flasheventsns = abc.namespace(Namespace.Namespace, abc.string('flash.events'));
+        let spriteName = abc.qname(flashdisplayns, abc.string('Sprite'));
+        let wrapperName = abc.qname(pubns, abc.string('Wrapper'));
+
+        // Define the Wrapper sprite class
+
+        let cinit = abc.method({
+            name: abc.string('Wrapper_cinit'),
+            return_type: abc.qname(pubns, abc.string('void')),
+            param_types: []
+        });
+        let cinitBody = abc.methodBuilder();
+        cinitBody.returnvoid();
+        abc.methodBody({
+            method: cinit,
+            local_count: 1,
+            init_scope_depth: 0,
+            max_scope_depth: 8,
+            code: cinitBody.toBytes(),
+        })
+        let classi = abc.addClass(cinit, []);
+
+        let iinit = abc.method({
+            name: abc.string('Wrapper_iinit'),
+            return_type: abc.qname(pubns, abc.string('void')),
+            param_types: []
+        });
+        let iinitBody = abc.methodBuilder();
+        iinitBody.getlocal_0();
+        iinitBody.constructsuper(0);
+        iinitBody.returnvoid();
+        abc.methodBody({
+            method: iinit,
+            local_count: 1,
+            code: iinitBody.toBytes()
+        });
+
+        abc.instance({
+            name: wrapperName,
+            super_name: spriteName,
+            flags: 0,
+            iinit,
+            traits: [],
+        });
+    
+        // Initialize the Wrapper class
+        initBody.getlocal_0(); // 'this' for pushscope
+        initBody.pushscope();
+        initBody.findpropstrict(className); // find where to store the class property soon...
+        initBody.getlex(nameObject);
+        initBody.pushscope();
+        initBody.getlex(abc.qname(flasheventsns, abc.string('EventDispatcher')));
+        initBody.pushscope();
+        initBody.getlex(abc.qname(flashdisplayns, abc.string('DisplayObject')));
+        initBody.pushscope();
+        initBody.getlex(abc.qname(flashdisplayns, abc.string('InteractiveObject')));
+        initBody.pushscope();
+        initBody.getlex(abc.qname(flashdisplayns, abc.string('DisplayObjectContainer')));
+        initBody.pushscope();
+        initBody.getlex(spriteName); // get base class scope
+        initBody.pushscope();
+        initBody.getlex(spriteName); // get base class
+        initBody.newclass(classi);
+        initBody.popscope();
+        initBody.popscope();
+        initBody.popscope();
+        initBody.popscope();
+        initBody.popscope();
+        initBody.popscope();
+        initBody.initproperty(wrapperName);
+        
+        scriptTraits.push(abc.trait({
+            name: wrapperName,
+            kind: Trait.Class,
+            slot_id: 0,
+            classi: classi,
+        }));
+    }
+
+    initBody.returnvoid();
+    abc.methodBody({
+        method: init,
+        local_count: 1,
+        init_scope_depth: 0,
+        max_scope_depth: 8,
+        code: initBody.toBytes(),
+    });
+
+    abc.script(init, scriptTraits);
 
     let bytes = abc.toBytes();
     console.log(`\n\n${bytes.length} bytes of abc`);
@@ -1533,7 +1624,7 @@ function convertModule(mod) {
 }
 
 
-function generateSWF(symbols, bytecode) {
+function generateSWF(symbols, tags, bytecode) {
     let swf = new SWFFileBuilder();
 
     swf.header({
@@ -1549,7 +1640,7 @@ function generateSWF(symbols, bytecode) {
 
     swf.frameLabel('frame1');
     swf.doABC('frame1', bytecode);
-    swf.symbolClass(symbols);
+    swf.symbolClass(symbols, tags);
     swf.showFrame();
     swf.end();
 
@@ -1558,10 +1649,21 @@ function generateSWF(symbols, bytecode) {
 
 let wasm = fs.readFileSync(infile);
 let mod = binaryen.readBinary(wasm);
-let bytes = convertModule(mod);
+let bytes = convertModule(mod, sprite);
 
-//fs.writeFileSync('output.abc', bytes);
-
-let swf = generateSWF(['Instance'], bytes);
-
-fs.writeFileSync(outfile, swf);
+if (outfile.endsWith('.abc')) {
+    fs.writeFileSync(outfile, bytes);
+} else {
+    let classes = ['Instance'];
+    let tags = {};
+    if (sprite) {
+        /*
+        classes.push('Wrapper');
+        tags.Wrapper = 0;
+        tags.Instance = 1;
+        */
+        classes = ['Wrapper'];
+    }
+    let swf = generateSWF(classes, tags, bytes);
+    fs.writeFileSync(outfile, swf);
+}
