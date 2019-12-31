@@ -370,7 +370,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     if (right.value === 1) {
                         builder.inclocal_i(i);
                         if (info.isTee) {
-                            if (i )
                             builder.getlocal(i);
                         }
                         return;
