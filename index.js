@@ -342,10 +342,10 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitCallIndirect: (info) => {
             builder.getlocal_0(); // this argument
-            builder.getproperty(abc.qname('privatens', abc.string('wasm$table')))
+            builder.getproperty(abc.qname(privatens, abc.string('wasm$table')))
             traverse(info.target);
             info.operands.forEach(traverse);
-            let pubset = abc.ns_set([pubns]);
+            let pubset = abc.namespaceSet([pubns]);
             let runtime = abc.multinameL(pubset);
             switch (info.type) {
                 case binaryen.none:
@@ -1516,12 +1516,32 @@ function convertModule(mod) {
     }
 
     // Initialize the table
+    let tableName = abc.qname(privatens, abc.string('wasm$table'));
     iinitBody.getlocal_0();
     iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
     iinitBody.construct(0);
     // @fixme implement the initializer segments
     // needs accessors added to binaryen.js
-    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$table')));
+    iinitBody.initproperty(tableName);
+
+    for (let i = 0; i < mod.getNumFunctionTableSegments(); i++) {
+        let segment = mod.getFunctionTableSegmentInfoByIndex(i);
+        for (let j = 0; j < segment.functions.length; j++) {
+            let name = segment.functions[j];
+            let funcName = abc.qname(privatens, abc.string('func$' + name));
+
+            let index = segment.offset + j;
+            let pubset = abc.namespaceSet([pubns]); // is there a better way to do this?
+            let runtimeName = abc.multinameL(pubset);
+
+            iinitBody.getlocal_0();
+            iinitBody.getproperty(tableName);
+            iinitBody.pushint(index);
+            iinitBody.getlocal_0();
+            iinitBody.getproperty(funcName);
+            iinitBody.setproperty(runtimeName);
+        }
+    }
 
     // Initialize the import function slots
     for (let info of imports) {

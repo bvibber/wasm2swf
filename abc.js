@@ -126,17 +126,17 @@ class Namespace {
 
 class NamespaceSet {
     // @param {Array<int>} ns
-    constructor(ns) {
-        this.ns = ns;
+    constructor(namespaces) {
+        this.namespaces = namespaces;
     }
 
     equals(other) {
         if (this === other) {
             return true;
         }
-        if (this.ns.length === other.ns.length) {
-            for (let i = 0; i < this.ns.length; i++) {
-                if (this.ns[i] !== other.ns[i]) {
+        if (this.namespaces.length === other.namespaces.length) {
+            for (let i = 0; i < this.namespaces.length; i++) {
+                if (this.namespaces[i] !== other.namespaces[i]) {
                     return false;
                 }
             }
@@ -658,8 +658,8 @@ class ABCFileBuilder extends ABCBuilder {
 
     /// @param {Array<number>} ns_set
     ns_set_info(ns_set) {
-        this.u30(ns_set.length);
-        for (let ns of ns_set) {
+        this.u30(ns_set.namespaces.length);
+        for (let ns of ns_set.namespaces) {
             this.u30(ns);
         }
     }

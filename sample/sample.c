@@ -1,7 +1,12 @@
+#include <stdlib.h>
 #include <inttypes.h>
 
 int32_t sample_add_i32(int32_t a, int32_t b) {
     return a + b;
+}
+
+int32_t sample_mul_i32(int32_t a, int32_t b) {
+    return a * b;
 }
 
 int64_t sample_add_i64(int64_t a, int64_t b) {
@@ -61,4 +66,18 @@ int32_t palette_16color(int32_t color) {
         case 15: return 0xffffff + x;
         default: return -1 + x;
     }
+}
+
+typedef int32_t (*functype)(int32_t a, int32_t b);
+
+functype func_fetch(int32_t index) {
+    switch (index) {
+        case 0: return sample_add_i32;
+        case 1: return sample_mul_i32;
+        default: return NULL;
+    }
+}
+
+int32_t func_invoke(functype func, int32_t a, int32_t b) {
+    return func(a, b);
 }

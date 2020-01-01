@@ -91,3 +91,18 @@ setupDemo('palette_16color', [
     [15],
     [16],
 ]);
+
+document.getElementById('func_invoke').addEventListener('click', function() {
+    let a = 30;
+    let b = 77;
+
+    let add = swf.run('func_fetch', [0]);
+    log('func_fetch(0) -> ' + add);
+    let sum = swf.run('func_invoke', [add, a, b]);
+    log('func_invoke(' + [add, a, b] + ') -> ' + sum);
+
+    let mul = swf.run('func_fetch', [1]);
+    log('func_fetch(1) -> ' + mul);
+    let product = swf.run('func_invoke', [mul, a, b]);
+    log('func_invoke(' + [mul, a, b] + ') -> ' + product);
+});
