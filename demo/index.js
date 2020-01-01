@@ -51,7 +51,11 @@ function setupDemo(func, argSets, tempRet) {
     });
 }
 
-setupDemo('sample_add_i32', [[42, 3]]);
+setupDemo('sample_add_i32', [
+    [42, 3],
+    [-10, 89],
+    [0x7fffffff, 1]
+]);
 setupDemo('sample_add_i64', [[42, 0, 3, 0]], true);
 setupDemo('sample_add_f32', [[42.1, 3.2]]);
 setupDemo('sample_add_f64', [[42.1, 3.2]]);
