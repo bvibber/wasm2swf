@@ -45,9 +45,9 @@ class SWFBuilder extends Builder {
         let bits = new Bitstream();
         bits.ub(nbits, 5);
         bits.sb(x, nbits);
-        bits.sb(width, nbits);
+        bits.sb(xmax, nbits);
         bits.sb(y, nbits);
-        bits.sb(height, nbits);
+        bits.sb(ymax, nbits);
         this.bytes(bits.toBytes());
     }
 
