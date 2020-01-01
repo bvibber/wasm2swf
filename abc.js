@@ -357,10 +357,7 @@ class ABCBuilder extends Builder {
 
     s32(val) {
         val |= 0;
-        let bits = 32 - Math.clz32(Math.abs(val)) + 1;
-        if (bits > 32) {
-            throw new Error('wtf too many bits');
-        }
+        let bits = 32 - (val < 0 ? Math.clz32(~val) : Math.clz32(val)) + 1;
         do {
             let byte = val & 127;
             bits -= 7;
@@ -958,7 +955,7 @@ class MethodBuilder extends ABCBuilder {
 
     callpropvoid(index, arg_count) {
         this.log('callpropvoid', index, arg_count);
-        this.u8(0x46);
+        this.u8(0x4f);
         this.u30(index); // a multiname index
         this.u30(arg_count);
     }
