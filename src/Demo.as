@@ -16,6 +16,7 @@ package {
         public function Demo() {
             scratch = new ByteArray();
             scratch.endian = Endian.LITTLE_ENDIAN;
+            scratch.length = 8;
 
             privateUse = [];
             for (var i:int = 0; i < 256; i++) {
@@ -78,20 +79,20 @@ package {
             try {
                 return instance.exports[func].apply(instance, args);
             } catch (e:Error) {
-                return 'error: ' + e;
+                return 'error: ' + e + '\n' + e.getStackTrace();
             }
         }
 
         private function ogvjs_callback_video_packet(buffer:int, len:int, frameTimestamp:Number, keyframeTimestamp:Number, isKeyframe:Boolean):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_video_packet', [readBytesStr(buffer, len), frameTimestamp, keyframeTimestamp, isKeyframe]);
+            //ExternalInterface.call(callback, 'ogvjs_callback_video_packet', [readBytesStr(buffer, len), frameTimestamp, keyframeTimestamp, isKeyframe]);
         }
 
         private function ogvjs_callback_audio_packet(buffer:int, len:int, audioTimestamp:Number, discardPadding:Number):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_audio_packet', [readBytesStr(buffer, len), audioTimestamp, discardPadding]);
+            //ExternalInterface.call(callback, 'ogvjs_callback_audio_packet', [readBytesStr(buffer, len), audioTimestamp, discardPadding]);
         }
 
         private function ogvjs_callback_loaded_metadata(videoCodec:int, audioCodec:int):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_loaded_metadata', [readString(videoCodec), readString(audioCodec)]);
+            //ExternalInterface.call(callback, 'ogvjs_callback_loaded_metadata', [readString(videoCodec), readString(audioCodec)]);
         }
 
         private function emscripten_notify_memory_growth():void {
@@ -168,7 +169,7 @@ package {
             var memory:ByteArray = instance.exports.memory;
             var arr:Array = new Array(len);
             for (var i:int = 0; i < len; i++) {
-                arr[i] = String.fromCharCode(privateUse[memory[offset + i]]);
+                arr[i] = privateUse[memory[offset + i]];
             }
             return arr.join('');
         }

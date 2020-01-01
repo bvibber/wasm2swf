@@ -458,6 +458,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 }
                 builder.add_i();
             }
+
             switch (info.type) {
                 case binaryen.i32:
                     switch (info.bytes) {
@@ -1014,15 +1015,18 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         }
     };
 
-    function traverse(expr) {
-        walkExpression(expr, callbacks);
-    }
-
     let info = binaryen.getFunctionInfo(func);
     let argTypes = binaryen.expandType(info.params).map(avmType);
     let resultType = avmType(info.results);
     let varTypes = info.vars.map(avmType);
     let localTypes = argTypes.concat(varTypes);
+
+    let lineno = 1;
+    builder.debugfile(abc.string('func$' + info.name));
+    function traverse(expr) {
+        builder.debugline(lineno++);
+        walkExpression(expr, callbacks);
+    }
 
     console.log('\n\nfunc ' + info.name);
     console.log('  (' + argTypes.join(', ') + ')');
@@ -1212,6 +1216,7 @@ function convertModule(mod) {
         'remove-non-js-ops', // done by wasm2js, will introduce intrinsics?
         'flatten', // needed by i64 lowering
         'i64-to-i32-lowering', // needed to grok i64s in i32-world
+        //'alignment-lowering', // force aligned accesses
     ]);
     mod.optimize();
     mod.runPasses([
@@ -1493,7 +1498,7 @@ function convertModule(mod) {
     iinitBody.pushstring(abc.string('littleEndian'));
     iinitBody.setproperty(abc.qname(pubns, abc.string('endian')));
     iinitBody.dup();
-    iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
+    iinitBody.pushint(2 ** 26); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
     iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
