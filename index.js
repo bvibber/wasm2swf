@@ -16,11 +16,15 @@ function help() {
     console.error(`  -o outfile.swf save output as a loadable .swf movie`);
     console.error(`  -o outfile.abc save output as raw .abc bytecode`);
     console.error(`  --sprite       includes a stub Sprite class for Flash timeline`);
+    console.error(`  --debug        embed "line numbers" for debugging`);
+    console.error(`  --trace        emit trace() calls on every line`);
     console.error(`\n`);
 }
 
 let infile, outfile;
 let sprite = false;
+let debug = false;
+let trace = false;
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
@@ -32,6 +36,12 @@ while (args.length > 0) {
             break;
         case '--sprite':
             sprite = true;
+            break;
+        case '--debug':
+            debug = true;
+            break;
+        case '--trace':
+            trace = true;
             break;
         case '--help':
             help();
@@ -135,6 +145,14 @@ function walkExpression(expr, callbacks) {
     } else {
         throw new Error(`Unhandled node of type ${id}`);
     }
+}
+
+function foldConstant(id) {
+    let info = binaryen.getExpressionInfo(id);
+    if (info.id !== binaryen.ConstId) {
+        throw new Error('Got non-constant expression');
+    }
+    return info.value;
 }
 
 function convertFunction(func, abc, instanceTraits, addGlobal) {
@@ -261,12 +279,14 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             }
 
             traverse(info.ifTrue);
-            builder.label(ifend);
             if (info.ifFalse) {
                 let elseend = new Label();
                 builder.jump(elseend);
+                builder.label(ifend);
                 traverse(info.ifFalse);
                 builder.label(elseend);
+            } else {
+                builder.label(ifend);
             }
         },
     
@@ -414,7 +434,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
             let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
             let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-            addGlobal(name, type);
+            addGlobal(name, type, globalInfo);
     
             builder.getlocal_0(); // 'this' param
             builder.getproperty(name);
@@ -435,7 +455,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
             let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
             let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-            addGlobal(name, type);
+            addGlobal(name, type, globalInfo.init);
 
             builder.getlocal_0();
             traverse(info.value);
@@ -458,6 +478,19 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 }
                 builder.add_i();
             }
+
+            if (trace) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' load ptr - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
+
             switch (info.type) {
                 case binaryen.i32:
                     switch (info.bytes) {
@@ -505,7 +538,31 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 builder.add_i();
             }
 
+            if (trace) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' store ptr - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
+
             traverse(info.value);
+
+            if (trace) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' store val - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
 
             // Flash's si32/si16/si8/sf32/sf64 instructions take
             // value then pointer, but Wasm stores take pointer
@@ -532,7 +589,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     builder.sf64();
                     break;
                 default:
-                    throw new Error('unexpected store type ' + info.type);
+                    throw new Error('unexpected store type ' + value.type);
             }
         },
 
@@ -1014,15 +1071,30 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         }
     };
 
-    function traverse(expr) {
-        walkExpression(expr, callbacks);
-    }
-
     let info = binaryen.getFunctionInfo(func);
     let argTypes = binaryen.expandType(info.params).map(avmType);
     let resultType = avmType(info.results);
     let varTypes = info.vars.map(avmType);
     let localTypes = argTypes.concat(varTypes);
+
+    let lineno = 1;
+    if (debug) {
+        builder.debugfile(abc.string('func$' + info.name));
+    }
+    function traverse(expr) {
+        if (debug) {
+            builder.debugline(lineno);
+        }
+        if (trace) {
+            builder.getlex(abc.qname(pubns, abc.string('trace')));
+            builder.pushnull();
+            builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
+            builder.call(1);
+            builder.pop();
+        }
+        lineno++;
+        walkExpression(expr, callbacks);
+    }
 
     console.log('\n\nfunc ' + info.name);
     console.log('  (' + argTypes.join(', ') + ')');
@@ -1140,14 +1212,16 @@ function convertModule(mod) {
     let instanceTraits = [];
 
     let knownGlobals = {};
-    function addGlobal(name, type) {
+    function addGlobal(name, type, info) {
         if (!knownGlobals[name]) {
             instanceTraits.push(abc.trait({
                 name: name,
                 kind: Trait.Slot,
                 type_name: type,
             }));
-            knownGlobals[name] = true;
+            knownGlobals[name] = {
+                info
+            };
         }
     }
     addGlobal(
@@ -1212,6 +1286,7 @@ function convertModule(mod) {
         'remove-non-js-ops', // done by wasm2js, will introduce intrinsics?
         'flatten', // needed by i64 lowering
         'i64-to-i32-lowering', // needed to grok i64s in i32-world
+        //'alignment-lowering', // force aligned accesses
     ]);
     mod.optimize();
     mod.runPasses([
@@ -1485,6 +1560,39 @@ function convertModule(mod) {
     iinitBody.getlocal_0();
     iinitBody.constructsuper(0);
 
+    // Initialize globals
+    for (let glob of Object.values(knownGlobals)) {
+        let globalInfo = glob.info;
+        if (globalInfo) {
+            let init = globalInfo.init;
+            if (!init) continue;
+            let info = binaryen.getExpressionInfo(init);
+            if (info.id === binaryen.ConstId) {
+                iinitBody.getlocal_0();
+                switch (info.type) {
+                    case binaryen.i32:
+                        if (info.value >= -128 && info.value <= 127) {
+                            iinitBody.pushbyte(info.value);
+                        } else if (info.value >= -37268 && info.value <= 32767) {
+                            iinitBody.pushshort(info.value);
+                        } else {
+                            iinitBody.pushint(info.value);
+                        }
+                        break;
+                    case binaryen.f32:
+                    case binaryen.f64:
+                        iinitBody.pushdouble(info.value);
+                        break;
+                    default:
+                        throw new Error('Unexpected constant initializer type');
+                }
+                iinitBody.initproperty(abc.qname(privatens, abc.string('global$' + globalInfo.name)))
+            } else {
+                throw new Error('Non-constant global initializer');
+            }
+        }
+    }
+
     // Initialize the memory
     iinitBody.getlocal_0();
     iinitBody.getlex(abc.qname(flashutilsns, abc.string('ByteArray')));
@@ -1493,7 +1601,7 @@ function convertModule(mod) {
     iinitBody.pushstring(abc.string('littleEndian'));
     iinitBody.setproperty(abc.qname(pubns, abc.string('endian')));
     iinitBody.dup();
-    iinitBody.pushint(2 ** 24); // default to 16 MiB memory for the moment
+    iinitBody.pushint(2 ** 26); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
     iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
@@ -1572,7 +1680,7 @@ function convertModule(mod) {
 
                     let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
                     let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-                    addGlobal(name, type);
+                    addGlobal(name, type, globalInfo);
                 }
 
                 // @fixme this should export a WebAssembly.Global wrapper object

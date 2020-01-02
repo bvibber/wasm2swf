@@ -5,12 +5,68 @@ function log(str) {
     document.getElementById('log').appendChild(p);
 }
 
-function readyCallback(ok, msg) {
-    if (ok) {
-        log('ready!');
-    } else {
-        log('Flash reported error loading module.swf: ' + msg);
+var privateUse = [];
+for (var i = 0; i < 256; i++) {
+    privateUse[i] = String.fromCharCode(0xe000 + i);
+}
+
+function bytes2string(bytes) {
+    var len = bytes.length;
+    var arr = new Array(len);
+    for (var i = 0; i < len; i++) {
+        arr[i] = privateUse[bytes[i] & 0xff];
     }
+    return arr.join('');
+}
+
+function string2bytes(str) {
+    var len = str.length;
+    var arr = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
+        arr[i] = str.fromCharCode(i) & 0xff;
+    }
+    return arr;
+}
+
+var videoPackets = [];
+var audioPackets = [];
+var videoCodec = null;
+var audioCodec = null;
+
+var callbacks = {
+    ready: function() {
+        log('ready!');
+    },
+    error: function(msg) {
+        log('Flash reported error loading module.swf: ' + msg);
+    },
+    ogvjs_callback_loaded_metadata: function(aVideoCodec, anAudioCodec) {
+        videoCodec = aVideoCodec;
+        audioCodec = anAudioCodec;
+        log('video codec: ' + videoCodec);
+        log('audio codec: ' + audioCodec);
+    },
+    ogvjs_callback_video_packet: function(data, frameTimestamp, keyframeTimestamp, isKeyframe) {
+        log('video packet: ' + data.length + ' bytes at timestamp ' + frameTimestamp + (isKeyframe ? ', keyframe' : ''));
+        videoPackets.push({
+            data: data,
+            frameTimestamp: frameTimestamp,
+            keyframeTimestamp: keyframeTimestamp,
+            isKeyframe: isKeyframe
+        });
+    },
+    ogvjs_callback_audio_packet: function(data, audioTimestamp, discardPadding) {
+        log('audio packet: ' + data.length + ' bytes at timestamp ' + audioTimestamp);
+        audioPackets.push({
+            data: data,
+            audioTimestamp: audioTimestamp,
+            discardPadding: discardPadding
+        });
+    }
+};
+
+function readyCallback(method, args) {
+    callbacks[method].apply(null, args);
 }
 
 function param(name, value) {
@@ -50,6 +106,7 @@ function setupDemo(func, argSets, tempRet) {
         });
     });
 }
+/*
 
 setupDemo('sample_add_i32', [
     [42, 3],
@@ -109,4 +166,42 @@ document.getElementById('func_invoke').addEventListener('click', function() {
     log('func_fetch(1) -> ' + mul);
     let product = swf.run('func_invoke', [mul, a, b]);
     log('func_invoke(' + [mul, a, b] + ') -> ' + product);
+});
+*/
+
+document.getElementById('ogg_demux').addEventListener('click', function() {
+    var url = 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.ogv';
+    var xhr = new XMLHttpRequest();
+    xhr.addEventListener('load', function() {
+        var buffer = xhr.response;
+        var bytes = new Uint8Array(buffer);
+        log('loaded ' + url + ' -- ' + bytes.length + ' bytes');
+
+        bytes = bytes.subarray(0, 65536);
+
+        var ptr = swf.run('malloc', [bytes.length]);
+        log('malloc(' + bytes.length + ') -> ' + ptr);
+
+        //swf.writeBytes(ptr, Array.prototype.slice.apply(bytes));
+        swf.writeBytesStr(ptr, bytes2string(bytes));
+
+        swf.run('ogv_demuxer_init', []);
+        swf.run('ogv_demuxer_receive_input', [ptr, bytes.length]);
+
+        swf.run('free', [ptr]);
+        log('free(' + ptr + ')');
+
+        setTimeout(function again() {
+            var more = swf.run('ogv_demuxer_process', []);
+            console.log(more);
+            log('ogv_demuxer_process() -> ' + more);
+
+            if (more) {
+                setTimeout(again, 0);
+            }
+        }, 0);
+    });
+    xhr.open('GET', url);
+    xhr.responseType = 'arraybuffer';
+    xhr.send();
 });
