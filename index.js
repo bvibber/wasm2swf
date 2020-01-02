@@ -279,12 +279,14 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             }
 
             traverse(info.ifTrue);
-            builder.label(ifend);
             if (info.ifFalse) {
                 let elseend = new Label();
                 builder.jump(elseend);
+                builder.label(ifend);
                 traverse(info.ifFalse);
                 builder.label(elseend);
+            } else {
+                builder.label(ifend);
             }
         },
     
