@@ -455,7 +455,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
             let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
             let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-            addGlobal(name, type, globalInfo.init);
+            addGlobal(name, type, globalInfo);
 
             builder.getlocal_0();
             traverse(info.value);
