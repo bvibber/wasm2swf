@@ -173,7 +173,7 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
         var bytes = new Uint8Array(buffer);
         log('loaded ' + url + ' -- ' + bytes.length + ' bytes');
 
-        bytes = bytes.subarray(0, 1024);
+        bytes = bytes.subarray(0, 65536);
 
         var ptr = swf.run('malloc', [bytes.length]);
         log('malloc(' + bytes.length + ') -> ' + ptr);
@@ -187,20 +187,14 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
         swf.run('free', [ptr]);
         log('free(' + ptr + ')');
 
-        setTimeout(function() {
-            while (true) {
-                var more = swf.run('ogv_demuxer_process', []);
-                console.log(more);
-                log('ogv_demuxer_process() -> ' + more);
+        setTimeout(function again() {
+            var more = swf.run('ogv_demuxer_process', []);
+            console.log(more);
+            log('ogv_demuxer_process() -> ' + more);
 
-                break;
-
-                if (!more) {
-                    break;
-                }
+            if (more) {
+                setTimeout(again, 0);
             }
-
-            //swf.run('ogv_demuxer_destroy', []);
         }, 0);
     });
     xhr.open('GET', url);
