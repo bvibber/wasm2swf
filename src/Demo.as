@@ -77,6 +77,7 @@ package {
 
         private function run(func:String, args:Array):* {
             try {
+                trace('mem length: ' + instance.exports.memory.length);
                 return instance.exports[func].apply(instance, args);
             } catch (e:Error) {
                 return 'error: ' + e + '\n' + e.getStackTrace();

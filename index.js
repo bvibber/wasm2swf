@@ -16,11 +16,13 @@ function help() {
     console.error(`  -o outfile.swf save output as a loadable .swf movie`);
     console.error(`  -o outfile.abc save output as raw .abc bytecode`);
     console.error(`  --sprite       includes a stub Sprite class for Flash timeline`);
+    console.error(`  --debug        embed "line numbers" for debugging`);
     console.error(`\n`);
 }
 
 let infile, outfile;
 let sprite = false;
+let debug = false;
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
@@ -32,6 +34,9 @@ while (args.length > 0) {
             break;
         case '--sprite':
             sprite = true;
+            break;
+        case '--debug':
+            debug = true;
             break;
         case '--help':
             help();
@@ -459,6 +464,18 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 builder.add_i();
             }
 
+            if (debug) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' load ptr - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
+
             switch (info.type) {
                 case binaryen.i32:
                     switch (info.bytes) {
@@ -506,7 +523,31 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 builder.add_i();
             }
 
+            if (debug) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' store ptr - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
+
             traverse(info.value);
+
+            if (debug) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' store val - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
 
             // Flash's si32/si16/si8/sf32/sf64 instructions take
             // value then pointer, but Wasm stores take pointer
@@ -533,7 +574,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     builder.sf64();
                     break;
                 default:
-                    throw new Error('unexpected store type ' + info.type);
+                    throw new Error('unexpected store type ' + value.type);
             }
         },
 
@@ -1022,9 +1063,20 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     let localTypes = argTypes.concat(varTypes);
 
     let lineno = 1;
-    builder.debugfile(abc.string('func$' + info.name));
+    if (debug) {
+        builder.debugfile(abc.string('func$' + info.name));
+    }
     function traverse(expr) {
-        builder.debugline(lineno++);
+        if (debug) {
+            builder.debugline(lineno);
+
+            builder.getlex(abc.qname(pubns, abc.string('trace')));
+            builder.pushnull();
+            builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
+            builder.call(1);
+            builder.pop();
+        }
+        lineno++;
         walkExpression(expr, callbacks);
     }
 

@@ -200,7 +200,7 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
                 }
             }
 
-            swf.run('ogv_demuxer_destroy', []);
+            //swf.run('ogv_demuxer_destroy', []);
         }, 0);
     });
     xhr.open('GET', url);
