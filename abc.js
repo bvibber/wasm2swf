@@ -1303,7 +1303,7 @@ class MethodBuilder extends ABCBuilder {
 
     newarray(arg_count) {
         this.log('newarray', arg_count);
-        this.u8(0x86);
+        this.u8(0x56);
         this.u30(arg_count);
     }
 

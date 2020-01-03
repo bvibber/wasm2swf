@@ -23,7 +23,7 @@ function string2bytes(str) {
     var len = str.length;
     var arr = new Uint8Array(len);
     for (var i = 0; i < len; i++) {
-        arr[i] = str.fromCharCode(i) & 0xff;
+        arr[i] = str.charCodeAt(i) & 0xff;
     }
     return arr;
 }
@@ -92,7 +92,7 @@ log('loading ogg...');
 var swf = flashObject('demo.swf', 'readyCallback', 'ogv-demuxer-ogg.swf');
 document.body.appendChild(swf);
 
-
+var videoLoaded = false;
 codecCallbacks = {
     ready: function() {
         log('codec ready!');
@@ -109,6 +109,7 @@ codecCallbacks = {
                                         picX, picY,
                                         displayWidth, displayHeight)
     {
+        videoLoaded = true;
         log('video initialized: ' + frameWidth + 'x' + frameHeight +
             ' (chroma ' + chromaWidth + 'x' + chromaHeight + '), ' + fps + ' fps');
         log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
@@ -267,23 +268,24 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
 });
 
 document.getElementById('theora_decode').addEventListener('click', function() {
-    swf.run('ogv_video_decoder_init', []);
+    var init = codecSwf.run('ogv_video_decoder_init', []);
+    log('ogv_video_decoder_init() -> ' + init);
 
-    var loaded = false;
     function decodePacket(packet) {
         var bytes = packet.data;
-        console.log(string2bytes(bytes));
+        console.log(Array.prototype.slice.apply(string2bytes(bytes)));
         var ptr = codecSwf.run('malloc', [bytes.length]);
         log('malloc(' + bytes.length + ') -> ' + ptr);
         codecSwf.writeBinary(ptr, bytes);
         var ok;
-        if (!loaded) {
+        if (!videoLoaded) {
             ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
             log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
         } else {
             ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
             log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
         }
+
         codecSwf.run('free', [ptr]);
         log('free(' + ptr + ')');
 
@@ -296,8 +298,10 @@ document.getElementById('theora_decode').addEventListener('click', function() {
             return;
         }
         var packet = videoPackets.shift();
-        console.log(packet);
-        decodePacket(packet);
+        var ok = decodePacket(packet);
+        if (!ok) {
+            return;
+        }
 
         if (videoPackets.length > 0) {
             setTimeout(again, 0);

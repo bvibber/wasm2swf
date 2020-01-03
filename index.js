@@ -18,6 +18,7 @@ function help() {
     console.error(`  --sprite       includes a stub Sprite class for Flash timeline`);
     console.error(`  --debug        embed "line numbers" for debugging`);
     console.error(`  --trace        emit trace() calls on every line`);
+    console.error(`  --trace-funcs  emit trace() calls on every function entry`);
     console.error(`\n`);
 }
 
@@ -25,6 +26,7 @@ let infile, outfile;
 let sprite = false;
 let debug = false;
 let trace = false;
+let traceFuncs = false;
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
@@ -42,6 +44,9 @@ while (args.length > 0) {
             break;
         case '--trace':
             trace = true;
+            break;
+        case '--trace-funcs':
+            traceFuncs = true;
             break;
         case '--help':
             help();
@@ -158,6 +163,7 @@ function foldConstant(id) {
 function convertFunction(func, abc, instanceTraits, addGlobal) {
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
     let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
+    let builtinns = abc.namespace(Namespace.PackageNamespace, abc.string('http://adobe.com/AS3/2006/builtin'));
 
     const builder = abc.methodBuilder();
     let labelIndex = 0;
@@ -1107,6 +1113,21 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     if (info.module === '') {
         // Regular function
 
+        if (traceFuncs) {
+            builder.getlex(abc.qname(pubns, abc.string('trace')));
+            builder.pushnull();
+            builder.pushstring(abc.string(info.name + ': '));
+            for (let n = 0; n < argTypes.length; n++) {
+                builder.getlocal(n + 1);
+            }
+            builder.newarray(argTypes.length);
+            builder.pushstring(abc.string(', '));
+            builder.callproperty(abc.qname(builtinns, abc.string('join')), 1);
+            builder.add();
+            builder.call(1);
+            builder.pop();
+        }
+
         // Initialize local vars to their correct type
         let localBase = localTypes.length - varTypes.length;
         for (let i = localBase; i < localTypes.length; i++) {
@@ -1408,6 +1429,19 @@ function convertModule(mod) {
         op.add_i();
         op.pushbyte(16);
         op.lshift();
+
+        if (traceFuncs) {
+            op.dup();
+            op.getlex(abc.qname(pubns, abc.string('trace')));
+            op.swap();
+            op.pushnull();
+            op.swap();
+            op.pushstring(abc.string(' growing memory size'));
+            op.add();
+            op.call(1);
+            op.pop();
+        }
+
         op.setproperty(abc.qname(pubns, abc.string('length')));
 
         // return old;
@@ -1442,6 +1476,19 @@ function convertModule(mod) {
         op.getlocal_0();
         op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
         op.getproperty(abc.qname(pubns, abc.string('length')));
+
+        if (traceFuncs) {
+            op.dup();
+            op.getlex(abc.qname(pubns, abc.string('trace')));
+            op.swap();
+            op.pushnull();
+            op.swap();
+            op.pushstring(abc.string(' is the memory size'));
+            op.add();
+            op.call(1);
+            op.pop();
+        }
+
         op.pushbyte(16);
         op.urshift();
         op.convert_i();
