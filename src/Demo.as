@@ -28,8 +28,8 @@ package {
             ExternalInterface.addCallback('getTempRet0', getTempRet0);
             ExternalInterface.addCallback('readBytes', readBytes);
             ExternalInterface.addCallback('writeBytes', writeBytes);
-            ExternalInterface.addCallback('readBytesStr', readBytesStr);
-            ExternalInterface.addCallback('writeBytesStr', writeBytesStr);
+            ExternalInterface.addCallback('readBinary', readBinary);
+            ExternalInterface.addCallback('writeBinary', writeBinary);
             ExternalInterface.addCallback('readString', readString);
 
             try {
@@ -51,11 +51,21 @@ package {
                 var Instance:Class = loader.getClass("Instance");
                 instance = new Instance({
                     env: {
-                        ogvjs_callback_video_packet: ogvjs_callback_video_packet,
-                        ogvjs_callback_audio_packet: ogvjs_callback_audio_packet,
-                        ogvjs_callback_loaded_metadata: ogvjs_callback_loaded_metadata,
+                        // Demuxer callbacks
+                        ogvjs_callback_video_packet: makeCallback('ogvjs_callback_video_packet'),
+                        ogvjs_callback_audio_packet: makeCallback('ogvjs_callback_audio_packet'),
+                        ogvjs_callback_loaded_metadata: makeCallback('ogvjs_callback_loaded_metadata'),
+
+                        // Video decoder callbacks
+                        ogvjs_callback_init_video: makeCallback('ogvjs_callback_init_video'),
+                        ogvjs_callback_frame: makeCallback('ogvjs_callback_frame'),
+                        ogvjs_callback_async_complete: makeCallback('ogvjs_callback_async_complete'),
+
+                        // emscripten internals
                         emscripten_notify_memory_growth: emscripten_notify_memory_growth,
                         __syscall3: __syscall3,
+
+                        // wasm2js internals
                         getTempRet0: getTempRet0,
                         setTempRet0: setTempRet0,
                         wasm2js_scratch_load_i32: wasm2js_scratch_load_i32,
@@ -84,16 +94,10 @@ package {
             }
         }
 
-        private function ogvjs_callback_video_packet(buffer:int, len:int, frameTimestamp:Number, keyframeTimestamp:Number, isKeyframe:Boolean):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_video_packet', [readBytesStr(buffer, len), frameTimestamp, keyframeTimestamp, isKeyframe]);
-        }
-
-        private function ogvjs_callback_audio_packet(buffer:int, len:int, audioTimestamp:Number, discardPadding:Number):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_audio_packet', [readBytesStr(buffer, len), audioTimestamp, discardPadding]);
-        }
-
-        private function ogvjs_callback_loaded_metadata(videoCodec:int, audioCodec:int):void {
-            ExternalInterface.call(callback, 'ogvjs_callback_loaded_metadata', [readString(videoCodec), readString(audioCodec)]);
+        private function makeCallback(funcName:String):Function {
+            return function(...args):* {
+                return ExternalInterface.call(callback, funcName, args);
+            }
         }
 
         private function emscripten_notify_memory_growth():void {
@@ -166,7 +170,7 @@ package {
             return arr;
         }
 
-        private function readBytesStr(offset:int, len:int):String {
+        private function readBinary(offset:int, len:int):String {
             var memory:ByteArray = instance.exports.memory;
             var arr:Array = new Array(len);
             for (var i:int = 0; i < len; i++) {
@@ -183,7 +187,7 @@ package {
             }
         }
 
-        private function writeBytesStr(offset:int, str:String):void {
+        private function writeBinary(offset:int, str:String):void {
             var memory:ByteArray = instance.exports.memory;
             var len:int = str.length;
             for (var i:int = 0; i < len; i++) {

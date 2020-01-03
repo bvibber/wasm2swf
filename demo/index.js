@@ -41,12 +41,13 @@ var callbacks = {
         log('Flash reported error loading module.swf: ' + msg);
     },
     ogvjs_callback_loaded_metadata: function(aVideoCodec, anAudioCodec) {
-        videoCodec = aVideoCodec;
-        audioCodec = anAudioCodec;
+        videoCodec = swf.readString(aVideoCodec);
+        audioCodec = swf.readString(anAudioCodec);
         log('video codec: ' + videoCodec);
         log('audio codec: ' + audioCodec);
     },
-    ogvjs_callback_video_packet: function(data, frameTimestamp, keyframeTimestamp, isKeyframe) {
+    ogvjs_callback_video_packet: function(ptr, len, frameTimestamp, keyframeTimestamp, isKeyframe) {
+        var data = swf.readBinary(ptr, len);
         log('video packet: ' + data.length + ' bytes at timestamp ' + frameTimestamp + (isKeyframe ? ', keyframe' : ''));
         videoPackets.push({
             data: data,
@@ -55,7 +56,8 @@ var callbacks = {
             isKeyframe: isKeyframe
         });
     },
-    ogvjs_callback_audio_packet: function(data, audioTimestamp, discardPadding) {
+    ogvjs_callback_audio_packet: function(ptr, len, audioTimestamp, discardPadding) {
+        var data = swf.readBinary(ptr, len);
         log('audio packet: ' + data.length + ' bytes at timestamp ' + audioTimestamp);
         audioPackets.push({
             data: data,
@@ -183,7 +185,7 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
         log('malloc(' + bytes.length + ') -> ' + ptr);
 
         //swf.writeBytes(ptr, Array.prototype.slice.apply(bytes));
-        swf.writeBytesStr(ptr, bytes2string(bytes));
+        swf.writeBinary(ptr, bytes2string(bytes));
 
         swf.run('ogv_demuxer_init', []);
         swf.run('ogv_demuxer_receive_input', [ptr, bytes.length]);
