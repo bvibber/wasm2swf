@@ -308,3 +308,9 @@ document.getElementById('theora_decode').addEventListener('click', function() {
         }
     }, 0);
 });
+
+document.getElementById('dump_memory').addEventListener('click', function() {
+    let bytes = string2bytes(codecSwf.readBinary(1024, 1024));
+    log(Array.prototype.join.apply(bytes, [', ']));
+});
+

@@ -835,9 +835,24 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.ShrUInt32:
                     traverse(info.left);
+                    builder.convert_u();
                     traverse(info.right);
+                    builder.convert_u();
                     builder.urshift();
                     builder.convert_i();
+                    /*
+                    if (traceFuncs) {
+                        builder.dup();
+                        builder.getlex(abc.qname(pubns, abc.string('trace')));
+                        builder.swap();
+                        builder.pushnull();
+                        builder.swap();
+                        builder.pushstring(abc.string(' is urshift result'));
+                        builder.add();
+                        builder.call(1);
+                        builder.pop();
+                    }
+                    */
                     break;
                 case binaryen.ShrSInt32:
                     traverse(info.left);
@@ -1212,7 +1227,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 function binaryString(data) {
     let s = '';
     for (let byte of new Uint8Array(data)) {
-        s += String.fromCharCode(byte);
+        s += String.fromCharCode(0xe000 + byte);
     }
     return s;
 }
