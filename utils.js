@@ -4,7 +4,7 @@ class Builder {
     }
 
     log(...args) {
-        console.log.apply(console, args);
+        //console.log.apply(console, args);
     }
 
     toBytes() {

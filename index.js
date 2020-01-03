@@ -504,16 +504,21 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                             builder.li8();
                             if (info.isSigned) {
                                 builder.sxi8();
+                            } else {
+                                builder.convert_i();
                             }
                             break;
                         case 2:
                             builder.li16();
                             if (info.isSigned) {
                                 builder.sxi16();
+                            } else {
+                                builder.convert_i();
                             }
                             break;
                         case 4:
                             builder.li32();
+                            builder.convert_i();
                             break;
                     }
                     break;
@@ -837,7 +842,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     traverse(info.left);
                     builder.convert_u();
                     traverse(info.right);
-                    builder.convert_u();
                     builder.urshift();
                     builder.convert_i();
                     /*
@@ -847,7 +851,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                         builder.swap();
                         builder.pushnull();
                         builder.swap();
-                        builder.pushstring(abc.string(' is urshift result'));
+                        builder.pushstring(abc.string(' urshift result'));
                         builder.add();
                         builder.call(1);
                         builder.pop();
@@ -1059,8 +1063,26 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         visitReturn: (info) => {
             if (info.value) {
                 traverse(info.value);
+                if (traceFuncs) {
+                    builder.dup();
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.swap();
+                    builder.pushnull();
+                    builder.swap();
+                    builder.pushstring(abc.string(' returned from ' + funcName));
+                    builder.add();
+                    builder.call(1);
+                    builder.pop();
+                }
                 builder.returnvalue();
             } else {
+                if (traceFuncs) {
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.pushnull();
+                    builder.pushstring(abc.string('void returned from ' + funcName));
+                    builder.call(1);
+                    builder.pop();
+                }
                 builder.returnvoid();
             }
         },
@@ -1093,6 +1115,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     };
 
     let info = binaryen.getFunctionInfo(func);
+    var funcName = info.name; // var to use above. sigh
     let argTypes = binaryen.expandType(info.params).map(avmType);
     let resultType = avmType(info.results);
     let varTypes = info.vars.map(avmType);
@@ -1168,6 +1191,13 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         if (info.results == binaryen.none) {
             // why dont we have one?
+            if (traceFuncs) {
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.pushnull();
+                builder.pushstring(abc.string('void returned from ' + funcName));
+                builder.call(1);
+                builder.pop();
+            }
             builder.returnvoid();
         } else {
             // we should already have one

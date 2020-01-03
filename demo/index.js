@@ -286,6 +286,10 @@ document.getElementById('theora_decode').addEventListener('click', function() {
             log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
         }
 
+        if (typeof ok === 'string') {
+            return 0;
+        }
+
         codecSwf.run('free', [ptr]);
         log('free(' + ptr + ')');
 
@@ -310,7 +314,8 @@ document.getElementById('theora_decode').addEventListener('click', function() {
 });
 
 document.getElementById('dump_memory').addEventListener('click', function() {
-    let bytes = string2bytes(codecSwf.readBinary(1024, 1024));
+    var addr = parseInt(document.getElementById('dump_memory_addr').value, 10);
+    var bytes = string2bytes(codecSwf.readBinary(addr, 1024));
     log(Array.prototype.join.apply(bytes, [', ']));
 });
 
