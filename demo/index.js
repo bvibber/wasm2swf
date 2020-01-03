@@ -77,9 +77,9 @@ function param(name, value) {
     p.value = value;
     return p;
 }
-function flashObject(url, readyCallback) {
+function flashObject(url, readyCallback, moduleName) {
     var obj = document.createElement('object');
-    obj.appendChild(param('FlashVars', 'callback=' + readyCallback));
+    obj.appendChild(param('FlashVars', 'callback=' + readyCallback + '&module=' + moduleName));
     obj.appendChild(param('AllowScriptAccess', 'sameDomain'));
     obj.width = 10;
     obj.height = 10;
@@ -88,9 +88,67 @@ function flashObject(url, readyCallback) {
     return obj;
 }
 
-log('loading...');
-var swf = flashObject('demo.swf', 'readyCallback');
+log('loading ogg...');
+var swf = flashObject('demo.swf', 'readyCallback', 'ogv-demuxer-ogg.swf');
 document.body.appendChild(swf);
+
+
+codecCallbacks = {
+    ready: function() {
+        log('codec ready!');
+    },
+
+    error: function(err) {
+        log('codec failed: ' + err);
+    },
+
+    ogvjs_callback_init_video: function(frameWidth, frameHeight,
+                                        chromaWidth, chromaHeight,
+                                        fps,
+                                        picWidth, picHeight,
+                                        picX, picY,
+                                        displayWidth, displayHeight)
+    {
+        log('video initialized: ' + frameWidth + 'x' + frameHeight +
+            ' (chroma ' + chromaWidth + 'x' + chromaHeight + '), ' + fps + ' fps');
+        log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
+        log('display size ' + displayWidth + 'x' + displayHeight);
+    },
+
+    ogvjs_callback_frame: function(bufferY, strideY,
+                                   bufferCb, strideCb,
+                                   bufferCr, strideCr,
+                                   frameWidth, frameHeight,
+                                   chromaWidth, chromaHeight,
+                                   picWidth, picHeight,
+                                   picX, picY,
+                                   displayWidth, displayHeight)
+    {
+        log('frame callback!')
+        log('frame size ' + frameWidth + 'x' + frameHeight +
+            ' (chroma ' + chromaWidth + 'x' + chromaHeight + ')');
+        log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
+        log('display size ' + displayWidth + 'x' + displayHeight);
+
+        log('Y buffer ' + bufferY + '; stride ' + strideY);
+        log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
+        log('Cr buffer ' + bufferCr + '; stride ' + strideCr);
+        log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
+    },
+
+    ogvjs_callback_async_complete: function(ret, cpuTime) {
+        log('async frame complete (should not happen');
+    }
+};
+
+function codecCallback(method, args) {
+    codecCallbacks[method].apply(null, args);
+}
+
+log('loading theora...');
+var codecSwf = flashObject('demo.swf', 'codecCallback', 'ogv-decoder-video-theora.swf');
+document.body.appendChild(codecSwf);
+
 
 function setupDemo(func, argSets, tempRet) {
     document.getElementById(func).addEventListener('click', function() {
@@ -206,4 +264,43 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
     xhr.open('GET', url);
     xhr.responseType = 'arraybuffer';
     xhr.send();
+});
+
+document.getElementById('theora_decode').addEventListener('click', function() {
+    swf.run('ogv_video_decoder_init', []);
+
+    var loaded = false;
+    function decodePacket(packet) {
+        var bytes = packet.data;
+        console.log(string2bytes(bytes));
+        var ptr = codecSwf.run('malloc', [bytes.length]);
+        log('malloc(' + bytes.length + ') -> ' + ptr);
+        codecSwf.writeBinary(ptr, bytes);
+        var ok;
+        if (!loaded) {
+            ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
+            log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+        } else {
+            ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
+            log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+        }
+        codecSwf.run('free', [ptr]);
+        log('free(' + ptr + ')');
+
+        return ok;
+    }
+
+    setTimeout(function again() {
+        if (videoPackets.length == 0) {
+            log('no more video packets');
+            return;
+        }
+        var packet = videoPackets.shift();
+        console.log(packet);
+        decodePacket(packet);
+
+        if (videoPackets.length > 0) {
+            setTimeout(again, 0);
+        }
+    }, 0);
 });

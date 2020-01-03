@@ -7,6 +7,7 @@ package {
 
     public class Demo extends Sprite {
         private var callback:String;
+        private var moduleName:String;
         private var loader:ClassLoader;
         private var instance:Object;
         private var tempRet0:int;
@@ -24,6 +25,7 @@ package {
             }
 
             callback = loaderInfo.parameters.callback;
+            moduleName = loaderInfo.parameters.module;
             ExternalInterface.addCallback('run', run);
             ExternalInterface.addCallback('getTempRet0', getTempRet0);
             ExternalInterface.addCallback('readBytes', readBytes);
@@ -36,7 +38,7 @@ package {
                 loader = new ClassLoader();
                 loader.addEventListener(ClassLoader.LOAD_ERROR, loadErrorHandler);
                 loader.addEventListener(ClassLoader.CLASS_LOADED, classLoadedHandler);
-                loader.load("ogv-demuxer-ogg.swf" + '?' + Math.random());
+                loader.load(moduleName + '?' + Math.random());
             } catch (e:Error) {
                 ExternalInterface.call(callback, 'error', ['exception']);
             }
