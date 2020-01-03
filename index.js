@@ -19,6 +19,8 @@ function help() {
     console.error(`  --debug        embed "line numbers" for debugging`);
     console.error(`  --trace        emit trace() calls on every line`);
     console.error(`  --trace-funcs  emit trace() calls on every function entry`);
+    console.error(`  --trace-mem    emit trace() calls on every load/store`);
+    console.error(`  --trace-only=x only trace on the given functions`);
     console.error(`\n`);
 }
 
@@ -27,10 +29,25 @@ let sprite = false;
 let debug = false;
 let trace = false;
 let traceFuncs = false;
+let traceMem = false;
+let traceOnly = [];
+
+function shouldTrace(funcName) {
+    if (traceOnly.length > 0) {
+        return traceOnly.indexOf(funcName) !== -1;
+    }
+    return true;
+}
 
 let args = process.argv.slice(2);
 while (args.length > 0) {
     let arg = args.shift();
+    let traceOnlyPrefix = '--trace-only=';
+    if (arg.startsWith(traceOnlyPrefix)) {
+        traceOnly = arg.substr(traceOnlyPrefix.length).split(',');
+        console.log(traceOnly);
+        continue;
+    }
     switch (arg) {
         case '-o':
         case '--output':
@@ -47,6 +64,9 @@ while (args.length > 0) {
             break;
         case '--trace-funcs':
             traceFuncs = true;
+            break;
+        case '--trace-mem':
+            traceMem = true;
             break;
         case '--help':
             help();
@@ -485,7 +505,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 builder.add_i();
             }
 
-            if (trace) {
+            if (traceMem && shouldTrace(funcName)) {
                 builder.dup();
                 builder.getlex(abc.qname(pubns, abc.string('trace')));
                 builder.swap();
@@ -549,7 +569,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 builder.add_i();
             }
 
-            if (trace) {
+            if (traceMem && shouldTrace(funcName)) {
                 builder.dup();
                 builder.getlex(abc.qname(pubns, abc.string('trace')));
                 builder.swap();
@@ -563,7 +583,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
             traverse(info.value);
 
-            if (trace) {
+            if (traceMem && shouldTrace(funcName)) {
                 builder.dup();
                 builder.getlex(abc.qname(pubns, abc.string('trace')));
                 builder.swap();
@@ -844,8 +864,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     traverse(info.right);
                     builder.urshift();
                     builder.convert_i();
-                    /*
-                    if (traceFuncs) {
+                    if (traceMem && shouldTrace(funcName)) {
                         builder.dup();
                         builder.getlex(abc.qname(pubns, abc.string('trace')));
                         builder.swap();
@@ -856,7 +875,6 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                         builder.call(1);
                         builder.pop();
                     }
-                    */
                     break;
                 case binaryen.ShrSInt32:
                     traverse(info.left);
@@ -1063,7 +1081,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         visitReturn: (info) => {
             if (info.value) {
                 traverse(info.value);
-                if (traceFuncs) {
+                if (traceFuncs && shouldTrace(funcName)) {
                     builder.dup();
                     builder.getlex(abc.qname(pubns, abc.string('trace')));
                     builder.swap();
@@ -1076,7 +1094,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 }
                 builder.returnvalue();
             } else {
-                if (traceFuncs) {
+                if (traceFuncs && shouldTrace(funcName)) {
                     builder.getlex(abc.qname(pubns, abc.string('trace')));
                     builder.pushnull();
                     builder.pushstring(abc.string('void returned from ' + funcName));
@@ -1129,7 +1147,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         if (debug) {
             builder.debugline(lineno);
         }
-        if (trace) {
+        if (trace && shouldTrace(funcName)) {
             builder.getlex(abc.qname(pubns, abc.string('trace')));
             builder.pushnull();
             builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
@@ -1151,7 +1169,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     if (info.module === '') {
         // Regular function
 
-        if (traceFuncs) {
+        if (traceFuncs && shouldTrace(funcName)) {
             builder.getlex(abc.qname(pubns, abc.string('trace')));
             builder.pushnull();
             builder.pushstring(abc.string(info.name + ': '));
@@ -1191,7 +1209,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         if (info.results == binaryen.none) {
             // why dont we have one?
-            if (traceFuncs) {
+            if (traceFuncs && shouldTrace(funcName)) {
                 builder.getlex(abc.qname(pubns, abc.string('trace')));
                 builder.pushnull();
                 builder.pushstring(abc.string('void returned from ' + funcName));
@@ -1475,7 +1493,7 @@ function convertModule(mod) {
         op.pushbyte(16);
         op.lshift();
 
-        if (traceFuncs) {
+        if (traceMem) {
             op.dup();
             op.getlex(abc.qname(pubns, abc.string('trace')));
             op.swap();
@@ -1522,7 +1540,7 @@ function convertModule(mod) {
         op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
         op.getproperty(abc.qname(pubns, abc.string('length')));
 
-        if (traceFuncs) {
+        if (traceMem) {
             op.dup();
             op.getlex(abc.qname(pubns, abc.string('trace')));
             op.swap();
