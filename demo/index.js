@@ -238,7 +238,7 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
         var bytes = new Uint8Array(buffer);
         log('loaded ' + url + ' -- ' + bytes.length + ' bytes');
 
-        bytes = bytes.subarray(0, 65536);
+        bytes = bytes.subarray(0, 65536 * 2);
 
         var ptr = swf.run('malloc', [bytes.length]);
         log('malloc(' + bytes.length + ') -> ' + ptr);
@@ -253,7 +253,12 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
         log('free(' + ptr + ')');
 
         setTimeout(function again() {
+            var start = performance.now();
             var more = swf.run('ogv_demuxer_process', []);
+            var delta = performance.now() - start;
+            log(delta + ' ms to decode');
+            console.log(delta + ' ms to decode');
+
             console.log(more);
             log('ogv_demuxer_process() -> ' + more);
 
@@ -273,11 +278,12 @@ document.getElementById('theora_decode').addEventListener('click', function() {
 
     function decodePacket(packet) {
         var bytes = packet.data;
-        console.log(Array.prototype.slice.apply(string2bytes(bytes)));
         var ptr = codecSwf.run('malloc', [bytes.length]);
         log('malloc(' + bytes.length + ') -> ' + ptr);
         codecSwf.writeBinary(ptr, bytes);
         var ok;
+
+        var start = performance.now();
         if (!videoLoaded) {
             ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
             log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
@@ -285,6 +291,9 @@ document.getElementById('theora_decode').addEventListener('click', function() {
             ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
             log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
         }
+        var delta = performance.now() - start;
+        log(delta + ' ms to decode');
+        console.log(delta + ' ms to decode');
 
         if (typeof ok === 'string') {
             return 0;

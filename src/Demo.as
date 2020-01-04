@@ -60,7 +60,8 @@ package {
 
                         // Video decoder callbacks
                         ogvjs_callback_init_video: makeCallback('ogvjs_callback_init_video'),
-                        ogvjs_callback_frame: makeCallback('ogvjs_callback_frame'),
+                        //ogvjs_callback_frame: makeCallback('ogvjs_callback_frame'),
+                        ogvjs_callback_frame: function():void {},
                         ogvjs_callback_async_complete: makeCallback('ogvjs_callback_async_complete'),
 
                         // emscripten internals
