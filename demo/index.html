@@ -6,7 +6,6 @@
     </head>
     <body>
         <h1>wasm2swf demo</h1>
-        <div id=log></div>
         <div>
             <!--
             <button id=sample_add_i32>sample_add_i32</button>
@@ -21,10 +20,8 @@
             <button id=ogg_demux>ogg_demux</button>
             <button id=theora_decode>theora_decode</button>
         </div>
-        <div>
-            <button id=dump_memory>dump_memory</button>
-            <input id=dump_memory_addr value=1024>
-        </div>
+        <canvas id=player></canvas>
+        <div id=log></div>
         <script src=index.js></script>
     </body>
 </html>

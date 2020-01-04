@@ -4,11 +4,12 @@ all : demo
 
 .FAKE : all demo clean distclean
 
-demo : demo/module.swf demo/demo.swf
+demo : demo/module.swf demo/demo.swf demo/index.js
 
 clean :
 	rm -f demo/demo.swf
 	rm -f demo/module.swf
+	rm -f demo/index.js
 
 distclean : clean
 	rm -f apache-flex-sdk-*-bin.tar.gz
@@ -61,3 +62,6 @@ demo/module.swf : sample/sample.wasm index.js swf.js abc.js
 
 sample/sample.wasm :
 	(cd sample && make)
+
+demo/index.js : src/demo.js
+	npx webpack --config webpack.config.js

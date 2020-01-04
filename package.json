@@ -10,5 +10,10 @@
   "license": "MIT",
   "dependencies": {
     "binaryen": "^89.0.0-nightly.20191219"
+  },
+  "devDependencies": {
+    "webpack": "^4.41.5",
+    "webpack-cli": "^3.3.10",
+    "yuv-canvas": "^1.2.6"
   }
 }
