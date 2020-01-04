@@ -36,7 +36,7 @@ I'm not sure if the properties and methods will be more performant than the emsc
 
 `f32` operations are not available either; as with JavaScript it supports 64-bit doubles only. Explicit rounding could be introduced at some performance cost, but for now 32-bit float values are approximated with doubles.
 
-Question: Are unaligned loads and stores supported? Doesn't indicate not, so hope so.
+Unaligned loads and stores are supported, so alignment lowering is not required as in wasm2js.
 
 AVM2 has separate `int` and `uint` types for 32-bit values; we use integer primarily and convert when needed to perform unsigned operations.
 
@@ -62,28 +62,26 @@ The `WebAssembly.Instance` class analogue holds the internals of a compiled modu
 
 Currently, `wasm2swf`/`wasm2js`-specific imports need to be manually set up on the imports object passed to the constructor. These will be set up internally in a bit.
 
-Static constructors, globals and function tables are not yet initialized, so beware only simple functions work so far!
+Static constructors are not yet initialized automatically, so some modules may require a manual call to the start function.
 
 ### Optimizations
 
-Patterns to match:
+Patterns matched:
 * `increment_i`, `decrement_i` opcodes to replace add/subtract by 1/-1
 * `inc_local` / `dec_local` to replace get-inc-set
-* `br_if` + condition -> if-not-condition
-* ??
+* `br_if` + condition -> if-condition
+* `if` + condition -> if-not-condition
 
 ## Todo
 
-* finish the condition optimizations for `br_if`
 * finish the constructor
-    * init values for globals
     * init function table segments (needs upstream work in binaryen's C and JS APIs)
     * call the start function
 * write bytecode for the scratch helper functions
 * clean up special wasm2js-related imports (`setTempRet0`, `getTempRet0`, scratch helpers)
 * compress with lzma
 * proper namespacing/classes for the API
-* test bigger codebases like theora, vpx
+* test bigger codebases like vpx, dav1d
 * `.swc` output for static linking
 
 ## Comparisons with Alchemy/FlasCC/CrossBridge
