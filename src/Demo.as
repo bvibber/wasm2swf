@@ -13,6 +13,7 @@ package {
         private var tempRet0:int;
         private var scratch:ByteArray;
         private var privateUse:Array;
+        private var setjmpId:int;
 
         public function Demo() {
             scratch = new ByteArray();
@@ -77,7 +78,114 @@ package {
                         wasm2js_scratch_store_i32: wasm2js_scratch_store_i32,
                         wasm2js_scratch_store_i64: wasm2js_scratch_store_i64,
                         wasm2js_scratch_store_f32: wasm2js_scratch_store_f32,
-                        wasm2js_scratch_store_f64: wasm2js_scratch_store_f64
+                        wasm2js_scratch_store_f64: wasm2js_scratch_store_f64,
+
+                        // emscripten exception / longjmp helpers
+                        emscripten_longjmp: function(env:int, val:int):void {
+                            instance.exports.setThrew(env, val || 1);
+                            throw "longjmp";
+                        },
+                        saveSetjmp: function saveSetjmp(env:int, label:int, table:int, size:int):int {
+                            var i:int = 0;
+                            var memory:ByteArray = instance.exports.memory;
+                            setjmpId++;
+                            memory.position = env;
+                            memory.writeInt(setjmpId);
+                            while (i < size) {
+                                memory.position = table + (i << 3);
+                                if (memory.readInt() == 0) {
+                                    memory.position = table + (i << 3);
+                                    memory.writeInt(setjmpId);
+                                    memory.writeInt(label);
+                                    memory.writeInt(0);
+                                    setTempRet0(size);
+                                    return table;
+                                }
+                                i++;
+                            }
+                            size *= 2;
+                            table = instance.exports.realloc(table, 8 * (size + 1));
+                            table = saveSetjmp(env, label, table, size);
+                            setTempRet0(size);
+                            return table;
+                        },
+                        testSetjmp: function testSetjmp(id:int, table:int, size:int):int {
+                            var i:int, curr:int;
+                            var memory:ByteArray = instance.exports.memory;
+                            while (i < size) {
+                                memory.position = table + (i << 3);
+                                curr = memory.readInt();
+                                if (curr == 0) break;
+                                if (curr == id) {
+                                    return memory.readInt();
+                                }
+                                i++;
+                            }
+                            return 0;
+                        },
+                        invoke_vi: function(func:int, arg1:int):void {
+                            var stackPtr:int = instance.exports.stackSave();
+                            try {
+                                instance.exports.dynCall_vi(func, arg1);
+                            } catch (e:String) {
+                                instance.exports.stackRestore(stackPtr);
+                                instance.exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                instance.exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                        },
+                        invoke_viiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int):void {
+                            var stackPtr:int = instance.exports.stackSave();
+                            try {
+                                instance.exports.dynCall_viiii(func, arg1, arg2, arg3, arg4);
+                            } catch (e:String) {
+                                instance.exports.stackRestore(stackPtr);
+                                instance.exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                instance.exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                        },
+                        invoke_iii: function(func:int, arg1:int, arg2:int):int {
+                            var stackPtr:int = instance.exports.stackSave();
+                            try {
+                                return instance.exports.dynCall_iii(func, arg1, arg2);
+                            } catch (e:String) {
+                                instance.exports.stackRestore(stackPtr);
+                                instance.exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                instance.exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                            return 0; // ??
+                        },
+                        invoke_iiii: function(func:int, arg1:int, arg2:int, arg3:int):int {
+                            var stackPtr:int = instance.exports.stackSave();
+                            try {
+                                return instance.exports.dynCall_iiii(func, arg1, arg2, arg3);
+                            } catch (e:String) {
+                                instance.exports.stackRestore(stackPtr);
+                                instance.exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                instance.exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                            return 0; // ??
+                        },
+                        invoke_iiiij: function(func:int, arg1:int, arg2:int, arg3:int, arg4lo:int, arg4hi:int):int {
+                            var stackPtr:int = instance.exports.stackSave();
+                            try {
+                                return instance.exports.dynCall_iiiij(func, arg1, arg2, arg3, arg4lo, arg4hi);
+                            } catch (e:String) {
+                                instance.exports.stackRestore(stackPtr);
+                                instance.exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                instance.exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                            return 0; // ??
+                        }
                     },
                     wasi_snapshot_preview1: {
                         proc_exit: wasi_proc_exit,
