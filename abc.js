@@ -212,7 +212,7 @@ class OptionDetail {
 class MethodBody {
     constructor(info) {
         this.method = info.method || 0;
-        this.max_stack = info.max_stack || 4096; // ! just use a large #?
+        this.max_stack = info.max_stack || 64; // ! just use a large #?
         this.local_count = info.local_count || 0; // includes args?
         this.init_scope_depth = info.init_scope_depth || 0;
         this.max_scope_depth = info.max_scope_depth || 0;
