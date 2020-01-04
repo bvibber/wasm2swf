@@ -78,12 +78,17 @@ package {
                         wasm2js_scratch_store_i64: wasm2js_scratch_store_i64,
                         wasm2js_scratch_store_f32: wasm2js_scratch_store_f32,
                         wasm2js_scratch_store_f64: wasm2js_scratch_store_f64
+                    },
+                    wasi_snapshot_preview1: {
+                        proc_exit: wasi_proc_exit,
+                        fd_write: wasi_fd_write,
+                        fd_close: wasi_fd_close
                     }
                 });
 
                 ExternalInterface.call(callback, 'ready', []);
             } catch (e:Error) {
-                ExternalInterface.call(callback, 'error', ['instantiation error']);
+                ExternalInterface.call(callback, 'error', ['instantiation error ' + e.getStackTrace()]);
             }
         }
 
@@ -152,6 +157,18 @@ package {
         }
 
         private function __syscall3(which:int, varargs:int):int {
+            return -1;
+        }
+
+        private function wasi_proc_exit():int {
+            throw new Error("proc_exit");
+        }
+
+        private function wasi_fd_write():int {
+            return -1;
+        }
+
+        private function wasi_fd_close():int {
             return -1;
         }
 

@@ -1233,7 +1233,20 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         },
 
         visitUnreachable: (info) => {
-            // no-op
+            builder.getlex(abc.qname(pubns, abc.string('Error')));
+            builder.pushstring(abc.string('unreachable'));
+            builder.construct(1);
+            builder.throw();
+
+            /*
+            let funcInfo = binaryen.getFunctionInfo(func);
+            if (funcInfo.results === binaryen.none) {
+                builder.returnvoid();
+            } else {
+                builder.pushbyte(0);
+                builder.returnvalue();
+            }
+            */
         }
     };
 
