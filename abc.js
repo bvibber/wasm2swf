@@ -855,11 +855,58 @@ class MethodBuilder extends ABCBuilder {
         this.cpool = cpool;
         this.fixups = [];
         this.addresses = new Map();
+        this.stack_depth = 0;
+        this.max_stack = 0;
     }
 
     toBytes() {
         this.applyFixups();
         return super.toBytes();
+    }
+
+    stackPush(n=1) {
+        this.stack_depth += n;
+        //this.log(`[+${n} -> ${this.stack_depth}]`);
+        this.max_stack = Math.max(this.stack_depth, this.max_stack);
+    }
+
+    stackPop(n=1) {
+        this.stack_depth -= n;
+        //this.log(`[-${n} -> ${this.stack_depth}]`);
+        if (this.stack_depth < 0) {
+            throw new Error('Oops, calculating stuff wrong. Stack underflow?');
+        }
+    }
+
+    stackPopMultiname(index) {
+        // @fixme beware of runtime multinames
+        switch (this.cpool.multinames[index].kind) {
+            case Multiname.QName:
+            case Multiname.QNameA:
+                // Nothing on the stack
+                break;
+            case Multiname.RTQName:
+            case Multiname.RTQNameA:
+                // Namespace on the stack
+                this.stackPop(1);
+                break;
+            case Multiname.RTQNameL:
+            case Multiname.RTQNameLA:
+                // Property name on stack
+                this.stackPop(2);
+                break;
+            case Multiname.Multiname:
+            case Multiname.MultinameA:
+                // Nothing on the stack
+                break;
+            case Multiname.MultinameL:
+            case Multiname.MultinameLA:
+                // Property name on the stack
+                this.stackPop(1);
+                break;
+            default:
+                throw new Error('unexpected multiname kind');
+        }
     }
 
     allocLabel(name) {
@@ -899,37 +946,51 @@ class MethodBuilder extends ABCBuilder {
     add() {
         this.log('add');
         this.u8(0xa0);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     add_i() {
         this.log('add_i');
         this.u8(0xc5);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     bitand() {
         this.log('bitand');
         this.u8(0xa8);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     bitnot() {
         this.log('bitnot');
         this.u8(0x97);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     bitor() {
         this.log('bitor');
         this.u8(0xa9);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     bitxor() {
         this.log('bitxor');
         this.u8(0xaa);
+        this.stackPop(2);
+        this.stackPush(1);
     }
 
     call(arg_count) {
         this.log('call', arg_count);
         this.u8(0x41);
         this.u30(arg_count);
+        this.stackPop(arg_count + 2);
+        this.stackPush(1);
     }
 
     callmethod(index, arg_count) {
@@ -937,6 +998,9 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x43);
         this.u30(index);
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     callproperty(index, arg_count) {
@@ -944,6 +1008,9 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x46);
         this.u30(index); // a multiname index
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     callproplex(index, arg_count) {
@@ -951,6 +1018,9 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x4c);
         this.u30(index); // a multiname index
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     callpropvoid(index, arg_count) {
@@ -958,49 +1028,68 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x4f);
         this.u30(index); // a multiname index
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPopMultiname(index);
     }
 
     coerce(index) {
         this.log('coerce', index);
         this.u8(0x80);
         this.u30(index);
+        this.stackPop();
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     coerce_a() {
         this.log('coerce_a');
         this.u8(0x82);
+        this.stackPop();
+        this.stackPush();
     }
 
     coerce_s() {
         this.log('coerce_s');
         this.u8(0x85);
+        this.stackPop();
+        this.stackPush();
     }
 
     construct(arg_count) {
         this.log('construct', arg_count);
         this.u8(0x42);
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPush();
     }
 
     constructsuper(arg_count) {
         this.log('constructsuper', arg_count);
         this.u8(0x49);
         this.u30(arg_count);
+        this.stackPop(arg_count + 1);
+        this.stackPush();
     }
 
     convert_i() {
         this.log('convert_i');
         this.u8(0x73);
+        this.stackPop();
+        this.stackPush();
     }
 
     convert_d() {
         this.log('convert_d');
         this.u8(0x75);
+        this.stackPop();
+        this.stackPush();
     }
 
     convert_u() {
         this.log('convert_u');
         this.u8(0x74);
+        this.stackPop();
+        this.stackPush();
     }
 
     declocal(index) {
@@ -1030,38 +1119,53 @@ class MethodBuilder extends ABCBuilder {
     decrement() {
         this.log('decrement');
         this.u8(0x93);
+        this.stackPop();
+        this.stackPush();
     }
 
     decrement_i() {
         this.log('decrement_i');
         this.u8(0xc1);
+        this.stackPop();
+        this.stackPush();
     }
 
     divide() {
         this.log('divide');
         this.u8(0xa3);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     dup() {
         this.log('dup');
         this.u8(0x2a);
+        this.stackPop();
+        this.stackPush(2);
     }
 
     equals() {
         this.log('equals');
         this.u8(0xab);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     findpropstrict(index) {
         this.log('findpropstrict', index);
         this.u8(0x5d);
         this.u30(index);
+        this.stackPop();
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     getlex(index) {
         this.log('getlex', index);
         this.u8(0x60);
         this.u30(index);
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     getlocal(index) {
@@ -1075,144 +1179,175 @@ class MethodBuilder extends ABCBuilder {
                 this.u8(0x62);
                 this.u30(index);
         }
+        this.stackPush();
     }
 
     getlocal_0() {
         this.log('getlocal_0');
         this.u8(0xd0);
+        this.stackPush();
     }
 
     getlocal_1() {
         this.log('getlocal_1');
         this.u8(0xd1);
+        this.stackPush();
     }
 
     getlocal_2() {
         this.log('getlocal_2');
         this.u8(0xd2);
+        this.stackPush();
     }
 
     getlocal_3() {
         this.log('getlocal_3');
         this.u8(0xd3);
+        this.stackPush();
     }
 
     getproperty(multiname) {
         this.log('getproperty', multiname);
         this.u8(0x66);
         this.u30(multiname);
+        this.stackPop();
+        this.stackPopMultiname(multiname);
+        this.stackPush();
     }
 
     getscopeobject(index) {
         this.log('getscopeobject', index);
         this.u8(0x65);
         this.u30(index);
+        this.stackPush();
     }
 
     getslot(index) {
         this.log('getslot', index);
         this.u8(0x6c);
         this.u30(index);
+        this.stackPush();
     }
 
     getsuper(index) {
         this.log('getsuper', index);
         this.u8(0x04);
         this.u30(index);
+        this.stackPop();
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     greaterequals() {
         this.log('greaterequals');
         this.u8(0xb0);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     greaterthan() {
         this.log('greaterthan');
         this.u8(0xaf);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     ifeq(label) {
         this.log('ifeq', label.name);
         this.u8(0x13);
         this.relativeAddress(label);
+        this.stackPop();
     }
 
     iffalse(label) {
         this.log('iffalse', label.name);
         this.u8(0x12);
         this.relativeAddress(label);
+        this.stackPop();
     }
 
     ifge(label) {
         this.log('ifge', label.name);
         this.u8(0x18);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifgt(label) {
         this.log('ifgt', label.name);
         this.u8(0x17);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifle(label) {
         this.log('ifle', label.name);
         this.u8(0x16);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     iflt(label) {
         this.log('iflt', label.name);
         this.u8(0x15);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifnge(label) {
         this.log('ifnge', label.name);
         this.u8(0x0f);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifngt(label) {
         this.log('ifngt', label.name);
         this.u8(0x0e);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifnle(label) {
         this.log('ifnle', label.name);
         this.u8(0x0d);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifnlt(label) {
         this.log('ifnlt', label.name);
         this.u8(0x0c);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifne(label) {
         this.log('ifne', label.name);
         this.u8(0x14);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifstricteq(label) {
         this.log('ifstricteq', label.name);
         this.u8(0x19);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     ifstrictne(label) {
         this.log('ifstrictne', label.name);
         this.u8(0x1a);
         this.relativeAddress(label);
+        this.stackPop(2);
     }
 
     iftrue(label) {
         this.log('iftrue', label.name);
         this.u8(0x11);
         this.relativeAddress(label);
+        this.stackPop();
     }
 
     inclocal(index) {
@@ -1230,17 +1365,24 @@ class MethodBuilder extends ABCBuilder {
     increment() {
         this.log('increment');
         this.u8(0x91);
+        this.stackPop();
+        this.stackPush();
     }
 
     increment_i() {
         this.log('increment_i');
         this.u8(0xc0);
+        this.stackPop();
+        this.stackPush();
     }
 
     initproperty(index) {
         this.log('initproperty', index);
         this.u8(0x68);
         this.u32(index);
+        this.stackPop(2);
+        this.stackPopMultiname(index);
+        this.stackPush();
     }
 
     jump(label) {
@@ -1264,11 +1406,15 @@ class MethodBuilder extends ABCBuilder {
     lessequals() {
         this.log('lessequals');
         this.u8(0xae);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     lessthan() {
         this.log('lessthan');
         this.u8(0xad);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     lookupswitch(default_label, case_labels) {
@@ -1285,60 +1431,80 @@ class MethodBuilder extends ABCBuilder {
         for (let fixup of fixups) {
             fixup.anchor = anchor;
         }
+        this.stackPop();
     }
 
     lshift() {
         this.log('lshift');
         this.u8(0xa5);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     modulo() {
         this.log('modulo');
         this.u8(0xa4);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     multiply() {
         this.log('multiply');
         this.u8(0xa2);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     multiply_i() {
         this.log('multiply_i');
         this.u8(0xc7);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     negate() {
         this.log('negate');
         this.u8(0x90);
+        this.stackPop();
+        this.stackPush();
     }
 
     negate_i() {
         this.log('negate_i');
         this.u8(0xc4);
+        this.stackPop();
+        this.stackPush();
     }
 
     newarray(arg_count) {
         this.log('newarray', arg_count);
         this.u8(0x56);
         this.u30(arg_count);
+        this.stackPop(arg_count);
+        this.stackPush();
     }
 
     newclass(index) {
         this.log('newclass', index);
         this.u8(0x58);
         this.u30(index);
+        this.stackPop();
+        this.stackPush();
     }
 
     newfunction(index) {
         this.log('newfunction', index);
         this.u8(0x40);
         this.u30(index);
+        this.stackPush();
     }
 
     newobject(arg_count) {
         this.log('newobject', arg_count);
         this.u8(0x55);
         this.u30(arg_count);
+        this.stackPop(arg_count * 2);
+        this.stackPush();
     }
 
     nop() {
@@ -1349,11 +1515,14 @@ class MethodBuilder extends ABCBuilder {
     not() {
         this.log('not');
         this.u8(0x96);
+        this.stackPop();
+        this.stackPush();
     }
 
     pop() {
         this.log('pop');
         this.u8(0x29);
+        this.stackPop();
     }
 
     popscope() {
@@ -1365,6 +1534,7 @@ class MethodBuilder extends ABCBuilder {
         this.log('pushbyte', byte_value);
         this.u8(0x24);
         this.u8(byte_value);
+        this.stackPush();
     }
 
     pushdouble(double_value) {
@@ -1372,11 +1542,13 @@ class MethodBuilder extends ABCBuilder {
         this.log('pushdouble', index + ' (' + double_value + ')');
         this.u8(0x2f);
         this.u30(index);
+        this.stackPush();
     }
 
     pushfalse() {
         this.log('pushfalse');
         this.u8(0x27);
+        this.stackPush();
     }
 
     pushint(int_value) {
@@ -1384,21 +1556,25 @@ class MethodBuilder extends ABCBuilder {
         this.log('pushint', index + ' (' + int_value + ')');
         this.u8(0x2d);
         this.u30(index);
+        this.stackPush();
     }
 
     pushnan() {
         this.log('pushnan');
         this.u8(0x28);
+        this.stackPush();
     }
 
     pushnull() {
         this.log('pushnull');
         this.u8(0x20);
+        this.stackPush();
     }
 
     pushscope() {
         this.log('pushscope');
         this.u8(0x30);
+        this.stackPush();
     }
 
     pushshort(int_value) {
@@ -1408,17 +1584,20 @@ class MethodBuilder extends ABCBuilder {
         this.log('pushshort', int_value);
         this.u8(0x25);
         this.u30(int_value & 0xffff);
+        this.stackPush();
     }
 
     pushstring(index) {
         this.log('pushstring', index);
         this.u8(0x2c);
         this.u30(index);
+        this.stackPush();
     }
 
     pushtrue() {
         this.log('pushtrue');
         this.u8(0x26);
+        this.stackPush();
     }
 
     pushuint(uint_value) {
@@ -1426,16 +1605,19 @@ class MethodBuilder extends ABCBuilder {
         this.log('pushuint', index + ' (' + uint_value + ')');
         this.u8(0x2e);
         this.u30(index);
+        this.stackPush();
     }
 
     pushundefined() {
         this.log('pushundefined');
         this.u8(0x21);
+        this.stackPush();
     }
 
     returnvalue() {
         this.log('returnvalue');
         this.u8(0x48);
+        this.stackPop();
     }
 
     returnvoid() {
@@ -1446,6 +1628,8 @@ class MethodBuilder extends ABCBuilder {
     rshift() {
         this.log('rshift');
         this.u8(0xa6);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     setlocal(index) {
@@ -1458,54 +1642,68 @@ class MethodBuilder extends ABCBuilder {
                 this.log('setlocal', index);
                 this.u8(0x63);
                 this.u30(index);
-        }
+                this.stackPop();
+            }
     }
 
     setlocal_0() {
         this.log('setlocal_0');
         this.u8(0xd4);
+        this.stackPop();
     }
 
     setlocal_1() {
         this.log('setlocal_1');
         this.u8(0xd5);
+        this.stackPop();
     }
 
     setlocal_2() {
         this.log('setlocal_2');
         this.u8(0xd6);
+        this.stackPop();
     }
 
     setlocal_3() {
         this.log('setlocal_3');
         this.u8(0xd7);
+        this.stackPop();
     }
 
     setproperty(index) {
         this.log('setproperty', index);
         this.u8(0x61);
         this.u30(index);
+        this.stackPop(2);
+        this.stackPopMultiname(index);
     }
 
     setslot(slotindex) {
         this.log('setslot', slotindex);
         this.u8(0x6d);
         this.u30(slotindex);
+        this.stackPop(2);
     }
 
     strictequals() {
         this.log('strictequals');
         this.u8(0xac);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     subtract() {
         this.log('subtract');
         this.u8(0xa1);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     subtract_i() {
         this.log('subtract_i');
         this.u8(0xc6);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     swap() {
@@ -1516,11 +1714,14 @@ class MethodBuilder extends ABCBuilder {
     throw() {
         this.log('throw');
         this.u8(0x03);
+        this.stackPop();
     }
 
     urshift() {
         this.log('urshift');
         this.u8(0xa7);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     // The alchemy/flascc/crossbridge magic memory opcodes
@@ -1528,66 +1729,92 @@ class MethodBuilder extends ABCBuilder {
     li8() {
         this.log('li8');
         this.u8(0x35);
+        this.stackPop();
+        this.stackPush();
     }
 
     li16() {
         this.log('li16');
         this.u8(0x36);
+        this.stackPop();
+        this.stackPush();
     }
 
     li32() {
         this.log('li32');
         this.u8(0x37);
+        this.stackPop();
+        this.stackPush();
     }
 
     lf32() {
         this.log('lf32');
         this.u8(0x38);
+        this.stackPop();
+        this.stackPush();
     }
 
     lf64() {
         this.log('lif64');
         this.u8(0x39);
+        this.stackPop();
+        this.stackPush();
     }
 
     si8() {
         this.log('si8');
         this.u8(0x3a);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     si16() {
         this.log('si16');
         this.u8(0x3b);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     si32() {
         this.log('si32');
         this.u8(0x3c);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     sf32() {
         this.log('sf32');
         this.u8(0x3d);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     sf64() {
         this.log('sf64');
         this.u8(0x3e);
+        this.stackPop(2);
+        this.stackPush();
     }
 
     sxi1() {
         this.log('sxi1');
         this.u8(0x50);
+        this.stackPop();
+        this.stackPush();
     }
 
     sxi8() {
         this.log('sxi8');
         this.u8(0x51);
+        this.stackPop();
+        this.stackPush();
     }
 
     sxi16() {
         this.log('sxi16');
         this.u8(0x52);
+        this.stackPop();
+        this.stackPush();
     }
 }
 

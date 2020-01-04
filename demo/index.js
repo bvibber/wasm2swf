@@ -256,7 +256,7 @@ document.getElementById('ogg_demux').addEventListener('click', function() {
             var start = performance.now();
             var more = swf.run('ogv_demuxer_process', []);
             var delta = performance.now() - start;
-            log(delta + ' ms to decode');
+            log(delta + ' ms to demux');
             console.log(delta + ' ms to decode');
 
             console.log(more);

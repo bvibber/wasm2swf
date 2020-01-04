@@ -1361,6 +1361,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         local_count: localTypes.length + 1,
         init_scope_depth: 3,
         max_scope_depth: 3,
+        max_stack: builder.max_stack,
         code: builder.toBytes()
     });
 
