@@ -63,5 +63,5 @@ demo/module.swf : sample/sample.wasm index.js swf.js abc.js
 sample/sample.wasm :
 	(cd sample && make)
 
-demo/index.js : src/demo.js
+demo/index.js : src/demo.js webpack.config.js
 	npx webpack --config webpack.config.js

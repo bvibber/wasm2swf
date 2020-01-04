@@ -1,3 +1,10 @@
+var YUVBuffer = require('yuv-buffer');
+var YUVCanvas = require('yuv-canvas');
+
+var canvas = document.getElementById('player');
+var frameSink;
+
+
 function log(str) {
     var text = document.createTextNode(str);
     var p = document.createElement('p');
@@ -94,6 +101,7 @@ var swf = flashObject('demo.swf', 'readyCallback', 'ogv-demuxer-ogg.swf');
 document.body.appendChild(swf);
 
 var videoLoaded = false;
+var drawDelta = 0;
 codecCallbacks = {
     ready: function() {
         log('codec ready!');
@@ -115,6 +123,10 @@ codecCallbacks = {
             ' (chroma ' + chromaWidth + 'x' + chromaHeight + '), ' + fps + ' fps');
         log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
         log('display size ' + displayWidth + 'x' + displayHeight);
+
+        canvas.width = displayWidth;
+        canvas.height = displayHeight;
+        frameSink = YUVCanvas.attach(canvas);
     },
 
     ogvjs_callback_frame: function(bufferY, strideY,
@@ -126,6 +138,7 @@ codecCallbacks = {
                                    picX, picY,
                                    displayWidth, displayHeight)
     {
+        var start = performance.now();
         log('frame callback!')
         log('frame size ' + frameWidth + 'x' + frameHeight +
             ' (chroma ' + chromaWidth + 'x' + chromaHeight + ')');
@@ -135,7 +148,29 @@ codecCallbacks = {
         log('Y buffer ' + bufferY + '; stride ' + strideY);
         log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
         log('Cr buffer ' + bufferCr + '; stride ' + strideCr);
-        log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
+
+        var format = YUVBuffer.format({
+            width: frameWidth,
+            height: frameHeight,
+            chromaWidth: chromaWidth,
+            chromaHeight: chromaHeight,
+            cropLeft: picX,
+            cropTop: picY,
+            cropWidth: picWidth,
+            cropHeight: picHeight,
+            displayWidth: displayWidth,
+            displayHeight: displayHeight,
+        });
+        var frame = YUVBuffer.frame(format);
+        frame.y.bytes = string2bytes(codecSwf.readBinary(bufferY, strideY * frameHeight));
+        frame.y.stride = strideY;
+        frame.u.bytes = string2bytes(codecSwf.readBinary(bufferCb, strideCb * chromaHeight));
+        frame.u.stride = strideCb;
+        frame.v.bytes = string2bytes(codecSwf.readBinary(bufferCr, strideCr * chromaHeight));
+        frame.v.stride = strideCr;
+        frameSink.drawFrame(frame);
+        var delta = performance.now() - start;
+        drawDelta = delta;
     },
 
     ogvjs_callback_async_complete: function(ret, cpuTime) {
@@ -293,7 +328,7 @@ document.getElementById('theora_decode').addEventListener('click', function() {
             ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
             log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
         }
-        var delta = performance.now() - start;
+        var delta = performance.now() - start - drawDelta
         log(delta + ' ms to decode');
         console.log(delta + ' ms to decode');
 
