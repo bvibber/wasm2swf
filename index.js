@@ -551,6 +551,18 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 default:
                     throw new Error('unexpected load type ' + info.type);
             }
+
+            if (traceMem && shouldTrace(funcName)) {
+                builder.dup();
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.swap();
+                builder.pushnull();
+                builder.swap();
+                builder.pushstring(abc.string(' load val - x' + info.bytes));
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
         },
 
         visitStore: (info) => {
