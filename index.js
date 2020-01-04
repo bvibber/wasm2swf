@@ -836,7 +836,8 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     builder.callpropvoid(abc.qname(pubns, abc.string('wasm2js_scratch_store_f32')), 1);
 
                     builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 0);
+                    builder.pushbyte(0);
+                    builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 1);
                     builder.convert_i();
 
                     break;
@@ -861,9 +862,9 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                     break;
                 case binaryen.ReinterpretInt32:
                     builder.getlocal_0(); // 'this'
+                    builder.pushbyte(0);
                     traverse(info.value);
-                    builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 1);
-                    builder.pop();
+                    builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 2);
 
                     builder.getlocal_0(); // 'this'
                     builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
@@ -1237,23 +1238,13 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             builder.pushstring(abc.string('unreachable'));
             builder.construct(1);
             builder.throw();
-
-            /*
-            let funcInfo = binaryen.getFunctionInfo(func);
-            if (funcInfo.results === binaryen.none) {
-                builder.returnvoid();
-            } else {
-                builder.pushbyte(0);
-                builder.returnvalue();
-            }
-            */
         }
     };
 
     let info = binaryen.getFunctionInfo(func);
     var funcName = info.name; // var to use above. sigh
     let argTypes = binaryen.expandType(info.params).map(avmType);
-    let resultType = avmType(info.results);
+    var resultType = avmType(info.results);
     let varTypes = info.vars.map(avmType);
     let localTypes = argTypes.concat(varTypes);
 

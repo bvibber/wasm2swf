@@ -2,7 +2,7 @@ var YUVBuffer = require('yuv-buffer');
 var YUVCanvas = require('yuv-canvas');
 
 var canvas = document.getElementById('player');
-var frameSink;
+var frameSink = YUVCanvas.attach(canvas);
 
 var videoSource = document.getElementById('video_source');
 var videoSources = {
@@ -166,7 +166,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
     }
 
     function loadCodec() {
-        var videoLoaded = false;
+        var videoLoaded = !(videoSource.value === 'ogg-theora'); // theora has header packets
         var drawDelta = 0;
         codecCallbacks = {
             ready: function() {
@@ -190,10 +190,6 @@ document.getElementById('decode_video').addEventListener('click', function() {
                     ' (chroma ' + chromaWidth + 'x' + chromaHeight + '), ' + fps + ' fps');
                 log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
                 log('display size ' + displayWidth + 'x' + displayHeight);
-
-                canvas.width = displayWidth;
-                canvas.height = displayHeight;
-                frameSink = YUVCanvas.attach(canvas);
             },
 
             ogvjs_callback_frame: function(bufferY, strideY,
