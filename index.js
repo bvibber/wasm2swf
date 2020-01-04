@@ -1245,7 +1245,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
         instanceTraits.push(abc.trait({
             name: name,
             kind: Trait.Slot,
-            type_name: abc.qname(pubns, abc.string('Function')),
+            type_name: abc.qname(pubns, abc.string('Function'))
         }));
         imports.push(info);
         builder.getlocal_0();
@@ -1279,7 +1279,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
     instanceTraits.push(abc.trait({
         name: abc.qname(privatens, abc.string('func$' + info.name)),
         kind: Trait.Method | Trait.Final,
-        //disp_id: method, // compiler-assigned, so use the same one
+        disp_id: method, // compiler-assigned, so use the same one
         method
     }));
 
