@@ -17,8 +17,17 @@
             <button id=palette_16color>palette_16color</button>
             <button id=func_invoke>func_invoke</button>
             -->
-            <button id=ogg_demux>ogg_demux</button>
-            <button id=theora_decode>theora_decode</button>
+        </div>
+        <div>
+            <select id=video_source>
+                <option value="ogg-theora">Ogg Theora</option>
+                <option value="webm-vp8">WebM VP8</option>
+                <option value="webm-vp8">WebM VP9</option>
+                <option value="webm-vp8">WebM AV1</option>
+            </select>
+        </div>
+        <div>
+            <button id=decode_video>decode_video</button>
         </div>
         <canvas id=player></canvas>
         <div id=log></div>
