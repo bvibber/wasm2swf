@@ -960,6 +960,22 @@ class MethodBuilder extends ABCBuilder {
         this.u30(arg_count);
     }
 
+    coerce(index) {
+        this.log('coerce', index);
+        this.u8(0x80);
+        this.u30(index);
+    }
+
+    coerce_a() {
+        this.log('coerce_a');
+        this.u8(0x82);
+    }
+
+    coerce_s() {
+        this.log('coerce_s');
+        this.u8(0x85);
+    }
+
     construct(arg_count) {
         this.log('construct', arg_count);
         this.u8(0x42);

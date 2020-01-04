@@ -366,6 +366,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitCall: (info) => {
             builder.getlocal_0(); // this argument
+            builder.coerce(abc.qname(pubns, abc.string('Instance')));
             info.operands.forEach(traverse);
             let method = abc.qname(privatens, abc.string('func$' + info.target));
             switch (info.type) {
@@ -388,7 +389,9 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
         visitCallIndirect: (info) => {
             builder.getlocal_0(); // this argument
+            builder.coerce(abc.qname(pubns, abc.string('Instance')));
             builder.getproperty(abc.qname(privatens, abc.string('wasm$table')))
+            builder.coerce(abc.qname(pubns, abc.string('Array')));
             traverse(info.target);
             info.operands.forEach(traverse);
             let pubset = abc.namespaceSet([pubns]);
@@ -463,6 +466,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             addGlobal(name, type, globalInfo);
     
             builder.getlocal_0(); // 'this' param
+            builder.coerce(abc.qname(pubns, abc.string('Instance')));
             builder.getproperty(name);
             switch (info.type) {
                 case binaryen.i32:
@@ -484,6 +488,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
             addGlobal(name, type, globalInfo);
 
             builder.getlocal_0();
+            builder.coerce(abc.qname(pubns, abc.string('Instance')));
             traverse(info.value);
             builder.setproperty(name);
         },
@@ -1273,7 +1278,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
 
     instanceTraits.push(abc.trait({
         name: abc.qname(privatens, abc.string('func$' + info.name)),
-        kind: Trait.Method,
+        kind: Trait.Method | Trait.Final,
         //disp_id: method, // compiler-assigned, so use the same one
         method
     }));
