@@ -127,74 +127,74 @@ package {
                             return 0;
                         },
                         invoke_vi: function(func:int, arg1:int):void {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 exports.dynCall_vi(func, arg1);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                         },
                         invoke_viiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int):void {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 exports.dynCall_viiii(func, arg1, arg2, arg3, arg4);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                         },
                         invoke_viiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int, arg6:int):void {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 exports.dynCall_viiii(func, arg1, arg2, arg3, arg4, arg5, arg6);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                         },
                         invoke_iii: function(func:int, arg1:int, arg2:int):int {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iii(func, arg1, arg2);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                             return 0; // ??
                         },
                         invoke_iiii: function(func:int, arg1:int, arg2:int, arg3:int):int {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiii(func, arg1, arg2, arg3);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                             return 0; // ??
                         },
                         invoke_iiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int):int {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
                             return 0; // ??
                         },
                         invoke_iiiij: function(func:int, arg1:int, arg2:int, arg3:int, arg4lo:int, arg4hi:int):int {
-                            var stackPtr:int = exports.stackSave();
+                            var sp:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiiij(func, arg1, arg2, arg3, arg4lo, arg4hi);
                             } catch (e:*) {
-                                exports.stackRestore(stackPtr);
+                                exports.stackRestore(sp);
                                 if (e !== e + 0 && e !== "longjmp") throw e;
                                 exports.setThrew(1, 0);
                             }
