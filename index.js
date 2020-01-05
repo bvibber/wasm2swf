@@ -617,21 +617,16 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                             builder.li8();
                             if (info.isSigned) {
                                 builder.sxi8();
-                            } else {
-                                builder.convert_i();
                             }
                             break;
                         case 2:
                             builder.li16();
                             if (info.isSigned) {
                                 builder.sxi16();
-                            } else {
-                                builder.convert_i();
                             }
                             break;
                         case 4:
                             builder.li32();
-                            builder.convert_i();
                             break;
                     }
                     break;
