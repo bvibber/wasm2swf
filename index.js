@@ -1839,13 +1839,23 @@ function convertModule(mod) {
     iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
     // Set it as domain memory
-    let flashsystemns = abc.namespace(Namespace.Namespace, abc.string('flash.system'));
-    iinitBody.getlocal_0();
-    iinitBody.getlex(abc.qname(flashsystemns, abc.string('ApplicationDomain')));
-    iinitBody.getproperty(abc.qname(pubns, abc.string('currentDomain')));
-    iinitBody.getlocal_0();
-    iinitBody.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
-    iinitBody.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
+    function attachDomainMemory(op) {
+
+        let flashsystemns = abc.namespace(Namespace.Namespace, abc.string('flash.system'));
+        op.getlocal_0();
+        op.coerce(abc.qname(pubns, abc.string('Instance')));
+
+        // @fixme maybe save the domain for handier access
+        op.getlex(abc.qname(flashsystemns, abc.string('ApplicationDomain')));
+        op.getproperty(abc.qname(pubns, abc.string('currentDomain')));
+
+        op.getlocal_0();
+        op.coerce(abc.qname(pubns, abc.string('Instance')));
+        op.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
+
+        op.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
+    }
+    attachDomainMemory(iinitBody);
 
     for (let i = 0; i < mod.getNumMemorySegments(); i++) {
         let segment = mod.getMemorySegmentInfoByIndex(i);
