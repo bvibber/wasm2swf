@@ -97,7 +97,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
         },
         ogvjs_callback_video_packet: function(ptr, len, frameTimestamp, keyframeTimestamp, isKeyframe) {
             var data = swf.readBinary(ptr, len);
-            log('video packet: ' + data.length + ' bytes at timestamp ' + frameTimestamp + (isKeyframe ? ', keyframe' : ''));
+            //log('video packet: ' + data.length + ' bytes at timestamp ' + frameTimestamp + (isKeyframe ? ', keyframe' : ''));
             videoPackets.push({
                 data: data,
                 frameTimestamp: frameTimestamp,
@@ -107,7 +107,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
         },
         ogvjs_callback_audio_packet: function(ptr, len, audioTimestamp, discardPadding) {
             var data = swf.readBinary(ptr, len);
-            log('audio packet: ' + data.length + ' bytes at timestamp ' + audioTimestamp);
+            //log('audio packet: ' + data.length + ' bytes at timestamp ' + audioTimestamp);
             audioPackets.push({
                 data: data,
                 audioTimestamp: audioTimestamp,
@@ -132,7 +132,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
             bytes = bytes.subarray(0, 65536 * 2);
 
             var ptr = swf.run('malloc', [bytes.length]);
-            log('malloc(' + bytes.length + ') -> ' + ptr);
+            //log('malloc(' + bytes.length + ') -> ' + ptr);
 
             //swf.writeBytes(ptr, Array.prototype.slice.apply(bytes));
             swf.writeBinary(ptr, bytes2string(bytes));
@@ -141,17 +141,16 @@ document.getElementById('decode_video').addEventListener('click', function() {
             swf.run('ogv_demuxer_receive_input', [ptr, bytes.length]);
 
             swf.run('free', [ptr]);
-            log('free(' + ptr + ')');
+            //log('free(' + ptr + ')');
 
             setTimeout(function again() {
                 var start = performance.now();
                 var more = swf.run('ogv_demuxer_process', []);
                 var delta = performance.now() - start;
-                log(delta + ' ms to demux');
-                console.log(delta + ' ms to demux');
+                //log(delta + ' ms to demux');
+                //console.log(delta + ' ms to demux');
 
-                console.log(more);
-                log('ogv_demuxer_process() -> ' + more);
+                //log('ogv_demuxer_process() -> ' + more);
 
                 if (more) {
                     setTimeout(again, 0);
@@ -202,6 +201,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
                                         displayWidth, displayHeight)
             {
                 var start = performance.now();
+                /*
                 log('frame callback!')
                 log('frame size ' + frameWidth + 'x' + frameHeight +
                     ' (chroma ' + chromaWidth + 'x' + chromaHeight + ')');
@@ -211,6 +211,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
                 log('Y buffer ' + bufferY + '; stride ' + strideY);
                 log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
                 log('Cr buffer ' + bufferCr + '; stride ' + strideCr);
+                */
 
                 var format = YUVBuffer.format({
                     width: frameWidth,
@@ -248,17 +249,17 @@ document.getElementById('decode_video').addEventListener('click', function() {
             function decodePacket(packet) {
                 var bytes = packet.data;
                 var ptr = codecSwf.run('malloc', [bytes.length]);
-                log('malloc(' + bytes.length + ') -> ' + ptr);
+                //log('malloc(' + bytes.length + ') -> ' + ptr);
                 codecSwf.writeBinary(ptr, bytes);
                 var ok;
 
                 var start = performance.now();
                 if (!videoLoaded) {
                     ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
-                    log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    //log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
                 } else {
                     ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
-                    log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    //log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
                 }
                 var delta = performance.now() - start - drawDelta
                 log(delta + ' ms to decode');
@@ -269,7 +270,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
                 }
 
                 codecSwf.run('free', [ptr]);
-                log('free(' + ptr + ')');
+                //log('free(' + ptr + ')');
 
                 return ok;
             }
