@@ -21,6 +21,7 @@ function help() {
     console.error(`  --trace-funcs  emit trace() calls on every function entry`);
     console.error(`  --trace-mem    emit trace() calls on every load/store`);
     console.error(`  --trace-only=x only trace on the given functions`);
+    console.error(`  --save-wast=outfile.wast save the transformed Wasm source`);
     console.error(`\n`);
 }
 
@@ -31,6 +32,7 @@ let trace = false;
 let traceFuncs = false;
 let traceMem = false;
 let traceOnly = [];
+let saveWast;
 
 function shouldTrace(funcName) {
     if (traceOnly.length > 0) {
@@ -42,11 +44,13 @@ function shouldTrace(funcName) {
 let args = process.argv.slice(2);
 while (args.length > 0) {
     let arg = args.shift();
-    let traceOnlyPrefix = '--trace-only=';
-    if (arg.startsWith(traceOnlyPrefix)) {
-        traceOnly = arg.substr(traceOnlyPrefix.length).split(',');
-        console.log(traceOnly);
-        continue;
+    let val;
+    function prefixed(prefix) {
+        if (arg.startsWith(prefix)) {
+            val = arg.substr(prefix.length);;
+            return true;
+        }
+        return false;
     }
     switch (arg) {
         case '-o':
@@ -73,6 +77,21 @@ while (args.length > 0) {
             process.exit(0);
             break;
         default:
+            if (prefixed('--trace-only=')) {
+                traceOnly = val.split(',');
+                continue;
+            }
+            if (prefixed('--save-wast=')) {
+                saveWast = val;
+                continue;
+            }
+
+            if (infile) {
+                console.error(`Too many input files, can take only one!\n`);
+                help();
+                process.exit(1);
+            }
+
             infile = arg;
     }
 }
@@ -2097,6 +2116,11 @@ function generateSWF(symbols, tags, bytecode) {
 let wasm = fs.readFileSync(infile);
 let mod = binaryen.readBinary(wasm);
 let bytes = convertModule(mod, sprite);
+
+if (saveWast) {
+    let buf = (new TextEncoder()).encode(mod.emitText());
+    fs.writeFileSync(saveWast, buf);
+}
 
 if (outfile.endsWith('.abc')) {
     fs.writeFileSync(outfile, bytes);
