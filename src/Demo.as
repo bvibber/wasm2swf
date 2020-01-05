@@ -86,7 +86,7 @@ package {
                         // emscripten exception / longjmp helpers
                         emscripten_longjmp: function(env:int, val:int):void {
                             exports.setThrew(env, val || 1);
-                            throw "longjmp";
+                            throw new LongJmp();
                         },
                         saveSetjmp: function saveSetjmp(env:int, label:int, table:int, size:int):int {
                             var i:int = 0;
@@ -128,7 +128,7 @@ package {
                             var stackPtr:int = exports.stackSave();
                             try {
                                 exports.dynCall_vi(func, arg1);
-                            } catch (e:String) {
+                            } catch (e:LongJmp) {
                                 exports.stackRestore(stackPtr);
                                 exports.setThrew(1, 0);
                             } catch (e:Error) {
@@ -140,7 +140,19 @@ package {
                             var stackPtr:int = exports.stackSave();
                             try {
                                 exports.dynCall_viiii(func, arg1, arg2, arg3, arg4);
-                            } catch (e:String) {
+                            } catch (e:LongJmp) {
+                                exports.stackRestore(stackPtr);
+                                exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                        },
+                        invoke_viiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int, arg6:int):void {
+                            var stackPtr:int = exports.stackSave();
+                            try {
+                                exports.dynCall_viiii(func, arg1, arg2, arg3, arg4, arg5, arg6);
+                            } catch (e:LongJmp) {
                                 exports.stackRestore(stackPtr);
                                 exports.setThrew(1, 0);
                             } catch (e:Error) {
@@ -152,7 +164,7 @@ package {
                             var stackPtr:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iii(func, arg1, arg2);
-                            } catch (e:String) {
+                            } catch (e:LongJmp) {
                                 exports.stackRestore(stackPtr);
                                 exports.setThrew(1, 0);
                             } catch (e:Error) {
@@ -165,7 +177,20 @@ package {
                             var stackPtr:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiii(func, arg1, arg2, arg3);
-                            } catch (e:String) {
+                            } catch (e:LongJmp) {
+                                exports.stackRestore(stackPtr);
+                                exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                exports.stackRestore(stackPtr);
+                                throw e;
+                            }
+                            return 0; // ??
+                        },
+                        invoke_iiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int):int {
+                            var stackPtr:int = exports.stackSave();
+                            try {
+                                return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4);
+                            } catch (e:LongJmp) {
                                 exports.stackRestore(stackPtr);
                                 exports.setThrew(1, 0);
                             } catch (e:Error) {
@@ -178,7 +203,7 @@ package {
                             var stackPtr:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiiij(func, arg1, arg2, arg3, arg4lo, arg4hi);
-                            } catch (e:String) {
+                            } catch (e:LongJmp) {
                                 exports.stackRestore(stackPtr);
                                 exports.setThrew(1, 0);
                             } catch (e:Error) {
@@ -207,6 +232,8 @@ package {
             try {
                 trace('mem length: ' + memory.length);
                 return exports[func].apply(instance, args);
+            } catch (e:String) {
+                return 'error: ' + e;
             } catch (e:Error) {
                 return 'error: ' + e + '\n' + e.getStackTrace();
             }
@@ -300,7 +327,7 @@ package {
         }
 
         private function readBinary(offset:int, len:int):String {
-            var arr:Array = new Array(len);
+            var arr:Vector.<String> = new Vector.<String>(len);
             for (var i:int = 0; i < len; i++) {
                 arr[i] = privateUse[memory[offset + i]];
             }

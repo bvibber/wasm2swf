@@ -256,14 +256,18 @@ document.getElementById('decode_video').addEventListener('click', function() {
                 var start = performance.now();
                 if (!videoLoaded) {
                     ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
-                    //log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    if (ok !== 1) {
+                        log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    }
                 } else {
                     ok = codecSwf.run('ogv_video_decoder_process_frame', [ptr, bytes.length]);
-                    //log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    if (ok !== 1) {
+                        log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    }
                 }
                 var delta = performance.now() - start - drawDelta
                 log(delta + ' ms to decode');
-                console.log(delta + ' ms to decode');
+                console.log(delta + ' ms to decode; ' + drawDelta + ' to extract/draw');
 
                 if (typeof ok === 'string') {
                     return 0;
