@@ -947,42 +947,42 @@ class MethodBuilder extends ABCBuilder {
         this.log('add');
         this.u8(0xa0);
         this.stackPop(2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     add_i() {
         this.log('add_i');
         this.u8(0xc5);
         this.stackPop(2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     bitand() {
         this.log('bitand');
         this.u8(0xa8);
         this.stackPop(2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     bitnot() {
         this.log('bitnot');
         this.u8(0x97);
-        this.stackPop(2);
-        this.stackPush(1);
+        this.stackPop(1);
+        this.stackPush();
     }
 
     bitor() {
         this.log('bitor');
         this.u8(0xa9);
         this.stackPop(2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     bitxor() {
         this.log('bitxor');
         this.u8(0xaa);
         this.stackPop(2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     call(arg_count) {
@@ -990,7 +990,7 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x41);
         this.u30(arg_count);
         this.stackPop(arg_count + 2);
-        this.stackPush(1);
+        this.stackPush();
     }
 
     callmethod(index, arg_count) {
@@ -1178,8 +1178,8 @@ class MethodBuilder extends ABCBuilder {
                 this.log('getlocal', index);
                 this.u8(0x62);
                 this.u30(index);
+                this.stackPush();
         }
-        this.stackPush();
     }
 
     getlocal_0() {
@@ -1226,6 +1226,7 @@ class MethodBuilder extends ABCBuilder {
         this.log('getslot', index);
         this.u8(0x6c);
         this.u30(index);
+        this.stackPop();
         this.stackPush();
     }
 
@@ -1531,6 +1532,9 @@ class MethodBuilder extends ABCBuilder {
     }
 
     pushbyte(byte_value) {
+        if (byte_value > 127 || byte_value < -128) {
+            throw new Error('pushbyte out of bounds');
+        }
         this.log('pushbyte', byte_value);
         this.u8(0x24);
         this.u8(byte_value);
@@ -1709,6 +1713,8 @@ class MethodBuilder extends ABCBuilder {
     swap() {
         this.log('swap');
         this.u8(0x2b);
+        this.stackPop(2);
+        this.stackPush(2);
     }
 
     throw() {
@@ -1765,35 +1771,30 @@ class MethodBuilder extends ABCBuilder {
         this.log('si8');
         this.u8(0x3a);
         this.stackPop(2);
-        this.stackPush();
     }
 
     si16() {
         this.log('si16');
         this.u8(0x3b);
         this.stackPop(2);
-        this.stackPush();
     }
 
     si32() {
         this.log('si32');
         this.u8(0x3c);
         this.stackPop(2);
-        this.stackPush();
     }
 
     sf32() {
         this.log('sf32');
         this.u8(0x3d);
         this.stackPop(2);
-        this.stackPush();
     }
 
     sf64() {
         this.log('sf64');
         this.u8(0x3e);
         this.stackPop(2);
-        this.stackPush();
     }
 
     sxi1() {
