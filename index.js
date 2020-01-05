@@ -111,1297 +111,6 @@ if (!(outfile.endsWith('.swf') || outfile.endsWith('.abc'))) {
     help();
     process.exit(1);
 }
-// Can we get this list from binaryen?
-let ids = [
-    'Invalid',
-    'Block',
-    'If',
-    'Loop',
-    'Break',
-    'Switch',
-    'Call',
-    'CallIndirect',
-    'LocalGet',
-    'LocalSet',
-    'GlobalGet',
-    'GlobalSet',
-    'Load',
-    'Store',
-    'Const',
-    'Unary',
-    'Binary',
-    'Select',
-    'Drop',
-    'Return',
-    'Host',
-    'Nop',
-    'Unreachable',
-    'AtomicCmpxchg',
-    'AtomicRMW',
-    'AtomicWait',
-    'AtomicNotify',
-    'AtomicFence',
-    'SIMDExtract',
-    'SIMDReplace',
-    'SIMDShuffle',
-    'SIMDTernary',
-    'SIMDShift',
-    'SIMDLoad',
-    'MemoryInit',
-    'DataDrop',
-    'MemoryCopy',
-    'MemoryFill',
-    'Try',
-    'Throw',
-    'Rethrow',
-    'BrOnExn',
-    'Push',
-    'Pop',
-];
-let expressionTypes = [];
-for (let name of ids) {
-    expressionTypes[binaryen[name + 'Id']] = name;
-}
-
-const U30_MAX = 2 ** 30 - 1;
-
-function avmType(t) {
-    switch (t) {
-        case binaryen.none: return 'void';
-        case binaryen.i32: return 'int';
-        case binaryen.f32: return 'Number';
-        case binaryen.f64: return 'Number';
-        default: throw new Error('unexpected type ' + t);
-    }
-}
-
-const imports = [];
-
-function walkExpression(expr, callbacks) {
-    let info = binaryen.getExpressionInfo(expr);
-    let cb = 'visit' + expressionTypes[info.id];
-    if (callbacks[cb]) {
-        let ret = callbacks[cb](info, expr);
-        if (ret === null) {
-            // Do not keep traversing.
-            return;
-        }
-    } else {
-        throw new Error(`Unhandled node of type ${id}`);
-    }
-}
-
-function foldConstant(id) {
-    let info = binaryen.getExpressionInfo(id);
-    if (info.id !== binaryen.ConstId) {
-        throw new Error('Got non-constant expression');
-    }
-    return info.value;
-}
-
-function convertFunction(func, abc, instanceTraits, addGlobal) {
-    let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
-    let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
-    let builtinns = abc.namespace(Namespace.PackageNamespace, abc.string('http://adobe.com/AS3/2006/builtin'));
-
-    const builder = abc.methodBuilder();
-    let labelIndex = 0;
-    let labelStack = [];
-
-    function labelByName(name) {
-        let label = labelStack.find((label) => label.name == name);
-        if (!label) {
-            throw new Error('cannot find label ' + name);
-        }
-        return label;
-    }
-
-    const callbacks = {
-        visitBlock: (info) => {
-            let name = info.name || 'block' + labelIndex++;
-            let label = new Label(name);
-            labelStack.push(label);
-            info.children.forEach(traverse);
-            if (label.used) {
-                builder.label(label);
-            }
-            labelStack.pop();
-        },
-
-        visitIf: (info) => {
-            let cond = binaryen.getExpressionInfo(info.condition);
-            let ifend = new Label();
-            if (cond.id == binaryen.BinaryId) {
-                switch(cond.op) {
-                    case binaryen.EqInt32:
-                    case binaryen.EqFloat32:
-                    case binaryen.EqFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifstrictne(ifend);
-                        break;
-                    case binaryen.NeInt32:
-                    case binaryen.NeFloat32:
-                    case binaryen.NeFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifstricteq(ifend);
-                        break;
-                    case binaryen.LtSInt32:
-                    case binaryen.LtFloat32:
-                    case binaryen.LtFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifnlt(ifend);
-                        break;
-                    case binaryen.LtUInt32:
-                        traverse(cond.left);
-                        builder.convert_u();
-                        traverse(cond.right);
-                        builder.convert_u();
-                        builder.ifnlt(ifend);
-                        break;
-                    case binaryen.LeSInt32:
-                    case binaryen.LeFloat32:
-                    case binaryen.LeFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifnle(ifend);
-                        break;
-                    case binaryen.LeUInt32:
-                        traverse(cond.left);
-                        builder.convert_u();
-                        traverse(cond.right);
-                        builder.convert_u();
-                        builder.ifnle(ifend);
-                        break;
-                    case binaryen.GtSInt32:
-                    case binaryen.GtFloat32:
-                    case binaryen.GtFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifngt(ifend);
-                        break;
-                    case binaryen.GtUInt32:
-                        traverse(cond.left);
-                        builder.convert_u();
-                        traverse(cond.right);
-                        builder.convert_u();
-                        builder.ifngt(ifend);
-                        break;
-                    case binaryen.GeSInt32:
-                    case binaryen.GeFloat32:
-                    case binaryen.GeFloat64:
-                        traverse(cond.left);
-                        traverse(cond.right);
-                        builder.ifnge(ifend);
-                        break;
-                    case binaryen.GeUInt32:
-                        traverse(cond.left);
-                        builder.convert_u();
-                        traverse(cond.right);
-                        builder.convert_u();
-                        builder.ifnge(ifend);
-                        break;
-                    default:
-                        traverse(info.condition);
-                        builder.iffalse(ifend);
-                }
-            } else if (cond.id == binaryen.UnaryId) {
-                switch(cond.op) {
-                    case binaryen.EqZInt32:
-                        traverse(cond.value);
-                        builder.iftrue(ifend);
-                        break;
-                    default:
-                        traverse(info.condition);
-                        builder.iffalse(ifend);
-                }
-            } else {
-                traverse(info.condition);
-                builder.iffalse(ifend);
-            }
-
-            traverse(info.ifTrue);
-            if (info.ifFalse) {
-                let elseend = new Label();
-                builder.jump(elseend);
-                builder.label(ifend);
-                traverse(info.ifFalse);
-                builder.label(elseend);
-            } else {
-                builder.label(ifend);
-            }
-        },
-    
-        visitLoop: (info) => {
-            let start = new Label(info.name);
-            labelStack.push(start);
-            builder.label(start);
-            traverse(info.body);
-            labelStack.pop();
-        },
-    
-        visitBreak: (info) => {
-            let label = labelByName(info.name);
-            if (info.value) {
-                traverse(info.value);
-            }
-            if (info.condition) {
-                let cond = binaryen.getExpressionInfo(info.condition);
-                if (cond.id === binaryen.BinaryId) {
-                    // Note these are backwards from 'if' :)
-                    switch (cond.op) {
-                        case binaryen.EqInt32:
-                        case binaryen.EqFloat32:
-                        case binaryen.EqFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.ifstricteq(label);
-                            break;
-                        case binaryen.NeInt32:
-                        case binaryen.NeFloat32:
-                        case binaryen.NeFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.ifstrictne(label);
-                            break;
-                        case binaryen.LtSInt32:
-                        case binaryen.LtFloat32:
-                        case binaryen.LtFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.iflt(label);
-                            break;
-                        case binaryen.LtUInt32:
-                            traverse(cond.left);
-                            builder.convert_u();
-                            traverse(cond.right);
-                            builder.convert_u();
-                            builder.iflt(label);
-                            break;
-                        case binaryen.LeSInt32:
-                        case binaryen.LeFloat32:
-                        case binaryen.LeFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.ifle(label);
-                            break;
-                        case binaryen.LeUInt32:
-                            traverse(cond.left);
-                            builder.convert_u();
-                            traverse(cond.right);
-                            builder.convert_u();
-                            builder.ifle(label);
-                            break;
-                        case binaryen.GtSInt32:
-                        case binaryen.GtFloat32:
-                        case binaryen.GtFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.ifgt(label);
-                            break;
-                        case binaryen.GtUInt32:
-                            traverse(cond.left);
-                            builder.convert_u();
-                            traverse(cond.right);
-                            builder.convert_u();
-                            builder.ifgt(label);
-                            break;
-                        case binaryen.GeSInt32:
-                        case binaryen.GeFloat32:
-                        case binaryen.GeFloat64:
-                            traverse(cond.left);
-                            traverse(cond.right);
-                            builder.ifge(label);
-                            break;
-                        case binaryen.GeUInt32:
-                            traverse(cond.left);
-                            builder.convert_u();
-                            traverse(cond.right);
-                            builder.convert_u();
-                            builder.ifge(label);
-                            break;
-
-                        default:
-                            traverse(info.condition);
-                            builder.iftrue(label);
-                            break;
-                    }
-                    return;
-                } else if (cond.id === binaryen.UnaryId) {
-                    if (cond.op === binaryen.EqZInt32) {
-                        traverse(cond.value);
-                        builder.iffalse(label);
-                        return;
-                    }
-                }
-
-                traverse(info.condition);
-                builder.iftrue(label);
-            } else {
-                builder.jump(label);
-            }
-        },
-
-        visitSwitch: (info, expr) => {
-            if (info.value) {
-                throw new Error('not sure what to do with info.value?')
-                traverse(info.value);
-            }
-            traverse(info.condition);
-            let default_label = labelByName(info.defaultName);
-
-            // currently broken upstream
-            let names = info.names;
-            // so we'll rebuild them. stronger. faster. better.
-            let n = binaryen._BinaryenSwitchGetNumNames(expr);
-            for (let i = 0; i < n; i++) {
-                let p = binaryen._BinaryenSwitchGetName(expr, i);
-                let h = binaryen.HEAPU8;
-                let s = '';
-                for (let i = p; h[i] != 0; i++) {
-                    s += String.fromCharCode(h[i]);
-                }
-                names[i] = s;
-            }
-
-            let case_labels = names.map(labelByName);
-            builder.lookupswitch(default_label, case_labels);
-        },
-
-        visitCall: (info) => {
-            builder.getlocal_0(); // this argument
-            builder.coerce(abc.qname(pubns, abc.string('Instance')));
-            info.operands.forEach(traverse);
-            let method = abc.qname(privatens, abc.string('func$' + info.target));
-            switch (info.type) {
-                case binaryen.none:
-                    builder.callpropvoid(method, info.operands.length);
-                    break;
-                case binaryen.i32:
-                    builder.callproperty(method, info.operands.length);
-                    builder.convert_i();
-                    break;
-                case binaryen.f32:
-                case binaryen.f64:
-                    builder.callproperty(method, info.operands.length);
-                    builder.convert_d();
-                    break;
-                default:
-                    throw new Error('unexpected type in call ' + info.type);
-            }
-        },
-
-        visitCallIndirect: (info) => {
-            builder.getlocal_0(); // this argument
-            builder.coerce(abc.qname(pubns, abc.string('Instance')));
-            builder.getproperty(abc.qname(privatens, abc.string('wasm$table')))
-            builder.coerce(abc.qname(pubns, abc.string('Array')));
-            traverse(info.target);
-            info.operands.forEach(traverse);
-            let pubset = abc.namespaceSet([pubns]);
-            let runtime = abc.multinameL(pubset);
-            switch (info.type) {
-                case binaryen.none:
-                    builder.callpropvoid(runtime, info.operands.length);
-                    break;
-                case binaryen.i32:
-                    builder.callproperty(runtime, info.operands.length);
-                    builder.convert_i();
-                    break;
-                case binaryen.f32:
-                case binaryen.f64:
-                    builder.callproperty(runtime, info.operands.length);
-                    builder.convert_d();
-                    break;
-                default:
-                    throw new Error('unexpected type in indirect call ' + info.type);
-            }
-        },
-
-        visitLocalGet: (info) => {
-            // AVM locals are shifted over by one versus WebAssembly,
-            // because the 0 index is used for the 'this' parameter.
-            let i = info.index + 1;
-            builder.getlocal(i);
-        },
-
-        visitLocalSet: (info) => {
-            // AVM locals are shifted over by one versus WebAssembly,
-            // because the 0 index is used for the 'this' parameter.
-            let i = info.index + 1;
-
-            let value = binaryen.getExpressionInfo(info.value);
-            if (value.id == binaryen.BinaryId && value.op == binaryen.AddInt32) {
-                let left = binaryen.getExpressionInfo(value.left);
-                let right = binaryen.getExpressionInfo(value.right);
-                if (left.id == binaryen.LocalGetId &&
-                    left.index == info.index &&
-                    right.id == binaryen.ConstId
-                ) {
-                    if (right.value === 1) {
-                        builder.inclocal_i(i);
-                        if (info.isTee) {
-                            builder.getlocal(i);
-                        }
-                        return;
-                    } else if (right.value === -1) {
-                        builder.declocal_i(i);
-                        if (info.isTee) {
-                            builder.getlocal(i);
-                        }
-                        return;
-                    }
-                }
-            }
-
-            traverse(info.value);
-            if (info.isTee) {
-                builder.dup();
-            }
-            builder.setlocal(i);
-        },
-
-        visitGlobalGet: (info) => {
-            let globalId = mod.getGlobal(info.name);
-            let globalInfo = binaryen.getGlobalInfo(globalId);
-
-            let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
-            let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-            addGlobal(name, type, globalInfo);
-    
-            builder.getlocal_0(); // 'this' param
-            builder.coerce(abc.qname(pubns, abc.string('Instance')));
-            builder.getproperty(name);
-            switch (info.type) {
-                case binaryen.i32:
-                    builder.convert_i();
-                    break;
-                case binaryen.f32:
-                case binaryen.f64:
-                    builder.convert_d();
-                    break;
-            }
-        },
-
-        visitGlobalSet: (info) => {
-            let globalId = mod.getGlobal(info.name);
-            let globalInfo = binaryen.getGlobalInfo(globalId);
-
-            let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
-            let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
-            addGlobal(name, type, globalInfo);
-
-            builder.getlocal_0();
-            builder.coerce(abc.qname(pubns, abc.string('Instance')));
-            traverse(info.value);
-            builder.setproperty(name);
-        },
-
-        visitLoad: (info) => {
-            // todo: can be isAtomic
-            // todo: need to worry about alignment hints or no?
-
-            traverse(info.ptr);
-
-            if (info.offset > 0) {
-                if (info.offset >= -128 && info.offset <= 127) {
-                    builder.pushbyte(info.offset);
-                } else if (info.offset >= -32768 && info.offset <= 32767) {
-                    builder.pushshort(info.offset);
-                } else {
-                    builder.pushint(info.offset);
-                }
-                builder.add_i();
-            }
-
-            if (traceMem && shouldTrace(funcName)) {
-                builder.dup();
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
-                builder.swap();
-                builder.pushnull();
-                builder.swap();
-                builder.pushstring(abc.string(' load ptr - x' + info.bytes));
-                builder.add();
-                builder.call(1);
-                builder.pop();
-            }
-
-            switch (info.type) {
-                case binaryen.i32:
-                    switch (info.bytes) {
-                        case 1:
-                            builder.li8();
-                            if (info.isSigned) {
-                                builder.sxi8();
-                            }
-                            break;
-                        case 2:
-                            builder.li16();
-                            if (info.isSigned) {
-                                builder.sxi16();
-                            }
-                            break;
-                        case 4:
-                            builder.li32();
-                            break;
-                    }
-                    break;
-                case binaryen.f32:
-                    builder.lf32();
-                    break;
-                case binaryen.f64:
-                    builder.lf64();
-                    break;
-                default:
-                    throw new Error('unexpected load type ' + info.type);
-            }
-
-            if (traceMem && shouldTrace(funcName)) {
-                builder.dup();
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
-                builder.swap();
-                builder.pushnull();
-                builder.swap();
-                builder.pushstring(abc.string(' load val - x' + info.bytes));
-                builder.add();
-                builder.call(1);
-                builder.pop();
-            }
-        },
-
-        visitStore: (info) => {
-            // todo: can be isAtomic
-            // todo: need to worry about alignment hints or no?
-
-            traverse(info.ptr);
-            if (info.offset > 0) {
-                if (info.offset >= -128 && info.offset <= 127) {
-                    builder.pushbyte(info.offset);
-                } else if (info.offset >= -32768 && info.offset <= 32767) {
-                    builder.pushshort(info.offset);
-                } else {
-                    builder.pushint(info.offset);
-                }
-                builder.add_i();
-            }
-
-            if (traceMem && shouldTrace(funcName)) {
-                builder.dup();
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
-                builder.swap();
-                builder.pushnull();
-                builder.swap();
-                builder.pushstring(abc.string(' store ptr - x' + info.bytes));
-                builder.add();
-                builder.call(1);
-                builder.pop();
-            }
-
-            traverse(info.value);
-
-            if (traceMem && shouldTrace(funcName)) {
-                builder.dup();
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
-                builder.swap();
-                builder.pushnull();
-                builder.swap();
-                builder.pushstring(abc.string(' store val - x' + info.bytes));
-                builder.add();
-                builder.call(1);
-                builder.pop();
-            }
-
-            // Flash's si32/si16/si8/sf32/sf64 instructions take
-            // value then pointer, but Wasm stores take pointer
-            // then value. For now do a stack swap but it might
-            // be better to reorder the items when we can confirm
-            // there's no side effects.
-            builder.swap();
-
-            let value = binaryen.getExpressionInfo(info.value);
-            switch (value.type) {
-                case binaryen.i32:
-                    switch (info.bytes) {
-                        case 1: builder.si8(); break;
-                        case 2: builder.si16(); break;
-                        case 4: builder.si32(); break;
-                        default:
-                            throw new Error('unexpected store size ' + info.bytes);
-                    }
-                    break;
-                case binaryen.f32:
-                    builder.sf32();
-                    break;
-                case binaryen.f64:
-                    builder.sf64();
-                    break;
-                default:
-                    throw new Error('unexpected store type ' + value.type);
-            }
-        },
-
-        visitConst: (info) => {
-            switch (info.type) {
-                case binaryen.i32:
-                    if (info.value >= -128 && info.value <= 127) {
-                        builder.pushbyte(info.value);
-                    } else if (info.value >= -32768 && info.value <= 32767) {
-                        builder.pushshort(info.value);
-                    } else {
-                        builder.pushint(info.value);
-                    }
-                    break;
-                case binaryen.f32:
-                case binaryen.f64:
-                    if (isNaN(info.value)) {
-                        builder.pushnan();
-                    } else {
-                        builder.pushdouble(info.value);
-                    }
-                    break;
-                default:
-                    throw new Error('unexpected const type ' + info.type);
-            }
-        },
-
-        visitUnary: (info) => {
-            switch (info.op) {
-                // int
-                case binaryen.ClzInt32:
-                    builder.getlocal_0(); // 'this'
-                    traverse(info.value);
-                    builder.callproperty(abc.qname(privatens, abc.string('wasm$clz32')), 1);
-                    builder.convert_i();
-                    break;
-                case binaryen.CtzInt32:
-                case binaryen.PopcntInt32:
-                    throw new Error('i32 unary should be removed');
-                    break;
-
-                // float
-                case binaryen.NegFloat32:
-                case binaryen.NegFloat64:
-                    traverse(info.value);
-                    builder.negate();
-                    break;
-                case binaryen.AbsFloat32:
-                case binaryen.AbsFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, abc.string('abs')), 1);
-                    builder.convert_d();
-                    break;
-                case binaryen.CeilFloat32:
-                case binaryen.CeilFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, abc.string('ceil')), 1);
-                    builder.convert_d();
-                    break;
-                case binaryen.FloorFloat32:
-                case binaryen.FloorFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
-                    builder.convert_d();
-                    break;
-                case binaryen.TruncFloat32:
-                case binaryen.TruncFloat64:
-                    throw new Error('trunc should be removed');
-                    break;
-                case binaryen.NearestFloat32:
-                case binaryen.NearestFloat64:
-                    throw new Error('nearest should be removed');
-                    break;
-                case binaryen.SqrtFloat32:
-                case binaryen.SqrtFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.value);
-                    builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
-                    builder.convert_d();
-                    break;
-
-
-                // relational
-                case binaryen.EqZInt32:
-                    traverse(info.value);
-                    builder.pushbyte(0);
-                    builder.strictequals();
-                    builder.convert_i();
-                    break;
-
-                // float to int
-                case binaryen.TruncSFloat32ToInt32:
-                case binaryen.TruncSFloat64ToInt32:
-                    traverse(info.value);
-                    builder.convert_i(); // ??? check rounding
-                    break;
-                case binaryen.TruncUFloat32ToInt32:
-                case binaryen.TruncUFloat64ToInt32:
-                    traverse(info.value);
-                    builder.convert_u(); // ??? check rounding
-                    break;
-                case binaryen.ReinterpretFloat32:
-                    builder.getlocal_0(); // 'this'
-                    traverse(info.value);
-                    builder.callpropvoid(abc.qname(pubns, abc.string('wasm2js_scratch_store_f32')), 1);
-
-                    builder.getlocal_0(); // 'this'
-                    builder.pushbyte(0);
-                    builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 1);
-                    builder.convert_i();
-
-                    break;
-                case binaryen.ReinterpretFloat64:
-                    throw new Error('reinterpret f64 should be removed already');
-                    break;
-                case binaryen.ConvertSInt32ToFloat32:
-                case binaryen.ConvertSInt32ToFloat64:
-                    traverse(info.value);
-                    builder.convert_d();
-                    break;
-                case binaryen.ConvertUInt32ToFloat32:
-                case binaryen.ConvertUInt32ToFloat64:
-                    traverse(info.value);
-                    builder.convert_u();
-                    builder.convert_d();
-                    break;
-                case binaryen.PromoteFloat32:
-                case binaryen.DemoteFloat64:
-                    // nop for now
-                    traverse(info.value);
-                    break;
-                case binaryen.ReinterpretInt32:
-                    builder.getlocal_0(); // 'this'
-                    builder.pushbyte(0);
-                    traverse(info.value);
-                    builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 2);
-
-                    builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
-                    builder.convert_d();
-
-                    break;
-                case binaryen.ReinterpretInt64:
-                    throw new Error('reinterpret int should be removed already');
-                    break;
-                
-                default:
-                    throw new Error('unhandled unary op ' + info.op);
-            }
-        },
-
-        visitBinary: (info) => {
-            let right;
-            switch (info.op) {
-                // int or float
-                case binaryen.AddInt32:
-                    traverse(info.left);
-                    right = binaryen.getExpressionInfo(info.right);
-                    if (right.id == binaryen.ConstId && right.value == 1) {
-                        builder.increment_i();
-                    } else if (right.id == binaryen.ConstId && right.value == -1) {
-                        builder.decrement_i();
-                    } else {
-                        traverse(info.right);
-                        builder.add_i();
-                    }
-                    break;
-                case binaryen.SubInt32:
-                    traverse(info.left);
-                    right = binaryen.getExpressionInfo(info.right);
-                    if (right.id == binaryen.ConstId && right.value == 1) {
-                        builder.decrement_i();
-                    } else if (right.id == binaryen.ConstId && right.value == -1) {
-                        builder.increment_i();
-                    } else {
-                        traverse(info.right);
-                        builder.subtract_i();
-                    }
-                    break;
-                case binaryen.MulInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.multiply_i();
-                    break;
-
-                // int
-                case binaryen.DivSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.divide();
-                    builder.convert_i();
-                    break;
-                case binaryen.DivUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.divide();
-                    builder.convert_u();
-                    break;
-                case binaryen.RemSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.modulo();
-                    builder.convert_i();
-                    break;
-                case binaryen.RemUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.modulo();
-                    builder.convert_u();
-                    break;
-
-                case binaryen.AndInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.bitand();
-                    break;
-                case binaryen.OrInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.bitor();
-                    break;
-                case binaryen.XorInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.bitxor();
-                    break;
-                case binaryen.ShlInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.lshift();
-                    break;
-                case binaryen.ShrUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.urshift();
-                    builder.convert_i();
-                    if (traceMem && shouldTrace(funcName)) {
-                        builder.dup();
-                        builder.getlex(abc.qname(pubns, abc.string('trace')));
-                        builder.swap();
-                        builder.pushnull();
-                        builder.swap();
-                        builder.pushstring(abc.string(' urshift result'));
-                        builder.add();
-                        builder.call(1);
-                        builder.pop();
-                    }
-                    break;
-                case binaryen.ShrSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.rshift();
-                    break;
-                case binaryen.RotLInt32:
-                    throw new Error('rotate should be removed already');
-                    break;
-                case binaryen.RotRInt32:
-                    throw new Error('rotate should be removed already');
-                    break;
-
-                // relational ops
-                // int or float
-                case binaryen.EqInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.strictequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.NeInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.strictequals();
-                    builder.not();
-                    builder.convert_i();
-                    break;
-                // int
-                case binaryen.LtSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.lessthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.LtUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.lessthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.LeSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.lessequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.LeUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.lessequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.GtSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.greaterthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.GtUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.greaterthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.GeSInt32:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.greaterequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.GeUInt32:
-                    traverse(info.left);
-                    builder.convert_u();
-                    traverse(info.right);
-                    builder.convert_u();
-                    builder.greaterequals();
-                    builder.convert_i();
-                    break;
-
-                // int or float
-                case binaryen.AddFloat32:
-                case binaryen.AddFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.add();
-                    break;
-                case binaryen.SubFloat32:
-                case binaryen.SubFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.subtract();
-                    break;
-                case binaryen.MulFloat32:
-                case binaryen.MulFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.multiply();
-                    break;
-
-                // float
-                case binaryen.DivFloat32:
-                case binaryen.DivFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.divide();
-                    break;
-                case binaryen.CopySignFloat32:
-                case binaryen.CopySignFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    throw new Error('copy sign should be removed already');
-                    break;
-                case binaryen.MinFloat32:
-                case binaryen.MinFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
-                    builder.convert_d();
-                    break;
-                case binaryen.MaxFloat32:
-                case binaryen.MaxFloat64:
-                    builder.getlex(abc.qname(pubns, abc.string('Math')));
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
-                    builder.convert_d();
-                    break;
-
-                // relational ops
-                // int or float
-                case binaryen.EqFloat32:
-                case binaryen.EqFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.strictequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.NeFloat32:
-                case binaryen.NeFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.strictequals();
-                    builder.not();
-                    builder.convert_i();
-                    break;
-                case binaryen.LtFloat32:
-                case binaryen.LtFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.lessthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.LeFloat32:
-                case binaryen.LeFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.lessequals();
-                    builder.convert_i();
-                    break;
-                case binaryen.GtFloat32:
-                case binaryen.GtFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.greaterthan();
-                    builder.convert_i();
-                    break;
-                case binaryen.GeFloat32:
-                case binaryen.GeFloat64:
-                    traverse(info.left);
-                    traverse(info.right);
-                    builder.greaterequals();
-                    builder.convert_i();
-                    break;
-                
-                default:
-                    throw new Error('unexpected binary op' + info);
-            }
-        },
-
-        visitSelect: (info) => {
-            traverse(info.ifTrue);
-            traverse(info.ifFalse);
-            traverse(info.condition);
-            let label = new Label();
-            builder.iftrue(label);
-            builder.swap();
-            builder.label(label);
-            builder.pop();
-        },
-
-        visitDrop: (info) => {
-            traverse(info.value);
-            builder.pop();
-        },
-
-        visitReturn: (info) => {
-            if (info.value) {
-                traverse(info.value);
-                if (traceFuncs && shouldTrace(funcName)) {
-                    builder.dup();
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.swap();
-                    builder.pushnull();
-                    builder.swap();
-                    builder.pushstring(abc.string(' returned from ' + funcName));
-                    builder.add();
-                    builder.call(1);
-                    builder.pop();
-                }
-                builder.returnvalue();
-            } else {
-                if (traceFuncs && shouldTrace(funcName)) {
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.pushnull();
-                    builder.pushstring(abc.string('void returned from ' + funcName));
-                    builder.call(1);
-                    builder.pop();
-                }
-                builder.returnvoid();
-            }
-        },
-
-        visitHost: (info) => {
-            switch (info.op) {
-                case binaryen.MemoryGrow:
-                    builder.getlocal_0(); // 'this'
-                    traverse(info.operands[0]);
-                    builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_grow')), 1);
-                    builder.convert_i();
-                    break;
-                case binaryen.MemorySize:
-                    builder.getlocal_0(); // 'this'
-                    builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_size')), 0);
-                    builder.convert_i();
-                    break;
-                default:
-                    throw new ('unknown host operation ' + info.op);
-            }
-        },
-
-        visitNop: (info) => {
-            builder.nop();
-        },
-
-        visitUnreachable: (info) => {
-            builder.getlex(abc.qname(pubns, abc.string('Error')));
-            builder.pushstring(abc.string('unreachable'));
-            builder.construct(1);
-            builder.throw();
-        }
-    };
-
-    let info = binaryen.getFunctionInfo(func);
-    var funcName = info.name; // var to use above. sigh
-    let argTypes = binaryen.expandType(info.params).map(avmType);
-    var resultType = avmType(info.results);
-    let varTypes = info.vars.map(avmType);
-    let localTypes = argTypes.concat(varTypes);
-
-    let lineno = 1;
-    if (debug) {
-        builder.debugfile(abc.string('func$' + info.name));
-    }
-    function traverse(expr) {
-        if (debug) {
-            builder.debugline(lineno);
-        }
-        if (trace && shouldTrace(funcName)) {
-            builder.getlex(abc.qname(pubns, abc.string('trace')));
-            builder.pushnull();
-            builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
-            builder.call(1);
-            builder.pop();
-        }
-        lineno++;
-        walkExpression(expr, callbacks);
-    }
-
-    console.log('\n\nfunc ' + info.name);
-    console.log('  (' + argTypes.join(', ') + ')');
-    console.log('  -> ' + resultType);
-    if (info.vars.length > 0) {
-        console.log('  var ' + varTypes.join(', '));
-    }
-    console.log('{');
-
-    if (info.module === '') {
-        // Regular function
-
-        if (traceFuncs && shouldTrace(funcName)) {
-            builder.getlex(abc.qname(pubns, abc.string('trace')));
-            builder.pushnull();
-            builder.pushstring(abc.string(info.name + ': '));
-            for (let n = 0; n < argTypes.length; n++) {
-                builder.getlocal(n + 1);
-            }
-            builder.newarray(argTypes.length);
-            builder.pushstring(abc.string(', '));
-            builder.callproperty(abc.qname(builtinns, abc.string('join')), 1);
-            builder.add();
-            builder.call(1);
-            builder.pop();
-        }
-
-        // Initialize local vars to their correct type
-        let localBase = localTypes.length - varTypes.length;
-        for (let i = localBase; i < localTypes.length; i++) {
-            let type = localTypes[i];
-            let index = i + 1;
-            switch (type) {
-                case 'int':
-                    builder.pushbyte(0);
-                    builder.setlocal(index);
-                    break;
-                case 'Number':
-                    builder.pushdouble(0);
-                    builder.setlocal(index);
-                    break;
-                default:
-                    throw new Error('unexpected local type ' + type);
-            }
-        }
-
-        if (info.body) {
-            traverse(info.body);
-        }
-
-        if (info.results == binaryen.none) {
-            // why dont we have one?
-            if (traceFuncs && shouldTrace(funcName)) {
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
-                builder.pushnull();
-                builder.pushstring(abc.string('void returned from ' + funcName));
-                builder.call(1);
-                builder.pop();
-            }
-            builder.returnvoid();
-        } else {
-            // we should already have one
-            //builder.returnvalue();
-        }
-    } else {
-        // Import function.
-        console.log('import from: ' + info.module + '.' + info.base);
-        let name = abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base));
-        instanceTraits.push(abc.trait({
-            name: name,
-            kind: Trait.Slot,
-            type_name: abc.qname(pubns, abc.string('Function'))
-        }));
-        imports.push(info);
-        builder.getlocal_0();
-        for (let index = 0; index < argTypes.length; index++) {
-            builder.getlocal(index + 1);
-        }
-        if (info.results == binaryen.none) {
-            builder.callpropvoid(name, argTypes.length);
-            builder.returnvoid();
-        } else {
-            builder.callproperty(name, argTypes.length);
-            // it will be coerced to the correct type
-            builder.returnvalue();
-        }
-    }
-
-    let method = abc.method({
-        name: abc.string(info.name),
-        return_type: abc.qname(pubns, abc.string(resultType)),
-        param_types: argTypes.map((type) => abc.qname(pubns, abc.string(type))),
-    });
-
-    abc.methodBody({
-        method,
-        local_count: localTypes.length + 1,
-        init_scope_depth: 3,
-        max_scope_depth: 3,
-        max_stack: builder.max_stack,
-        code: builder.toBytes()
-    });
-
-    instanceTraits.push(abc.trait({
-        name: abc.qname(privatens, abc.string('func$' + info.name)),
-        kind: Trait.Method | Trait.Final,
-        disp_id: method, // compiler-assigned, so use the same one
-        method
-    }));
-
-    console.log('}');
-
-    // @fixme we must also add it to the class
-
-}
-
-function binaryString(data) {
-    let s = '';
-    for (let byte of new Uint8Array(data)) {
-        s += String.fromCharCode(0xe000 + byte);
-    }
-    return s;
-}
 
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
@@ -1487,6 +196,1288 @@ function convertModule(mod) {
         binaryen.f64
     );
 
+    // Can we get this list from binaryen?
+    let ids = [
+        'Invalid',
+        'Block',
+        'If',
+        'Loop',
+        'Break',
+        'Switch',
+        'Call',
+        'CallIndirect',
+        'LocalGet',
+        'LocalSet',
+        'GlobalGet',
+        'GlobalSet',
+        'Load',
+        'Store',
+        'Const',
+        'Unary',
+        'Binary',
+        'Select',
+        'Drop',
+        'Return',
+        'Host',
+        'Nop',
+        'Unreachable',
+        'AtomicCmpxchg',
+        'AtomicRMW',
+        'AtomicWait',
+        'AtomicNotify',
+        'AtomicFence',
+        'SIMDExtract',
+        'SIMDReplace',
+        'SIMDShuffle',
+        'SIMDTernary',
+        'SIMDShift',
+        'SIMDLoad',
+        'MemoryInit',
+        'DataDrop',
+        'MemoryCopy',
+        'MemoryFill',
+        'Try',
+        'Throw',
+        'Rethrow',
+        'BrOnExn',
+        'Push',
+        'Pop',
+    ];
+    let expressionTypes = [];
+    for (let name of ids) {
+        expressionTypes[binaryen[name + 'Id']] = name;
+    }
+
+    const U30_MAX = 2 ** 30 - 1;
+
+    function avmType(t) {
+        switch (t) {
+            case binaryen.none: return 'void';
+            case binaryen.i32: return 'int';
+            case binaryen.f32: return 'Number';
+            case binaryen.f64: return 'Number';
+            default: throw new Error('unexpected type ' + t);
+        }
+    }
+
+    const imports = [];
+
+    function walkExpression(expr, callbacks) {
+        let info = binaryen.getExpressionInfo(expr);
+        let cb = 'visit' + expressionTypes[info.id];
+        if (callbacks[cb]) {
+            let ret = callbacks[cb](info, expr);
+            if (ret === null) {
+                // Do not keep traversing.
+                return;
+            }
+        } else {
+            throw new Error(`Unhandled node of type ${id}`);
+        }
+    }
+
+    function convertFunction(func) {
+        const builder = abc.methodBuilder();
+        let labelIndex = 0;
+        let labelStack = [];
+
+        function labelByName(name) {
+            let label = labelStack.find((label) => label.name == name);
+            if (!label) {
+                throw new Error('cannot find label ' + name);
+            }
+            return label;
+        }
+
+        const callbacks = {
+            visitBlock: (info) => {
+                let name = info.name || 'block' + labelIndex++;
+                let label = new Label(name);
+                labelStack.push(label);
+                info.children.forEach(traverse);
+                if (label.used) {
+                    builder.label(label);
+                }
+                labelStack.pop();
+            },
+
+            visitIf: (info) => {
+                let cond = binaryen.getExpressionInfo(info.condition);
+                let ifend = new Label();
+                if (cond.id == binaryen.BinaryId) {
+                    switch(cond.op) {
+                        case binaryen.EqInt32:
+                        case binaryen.EqFloat32:
+                        case binaryen.EqFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifstrictne(ifend);
+                            break;
+                        case binaryen.NeInt32:
+                        case binaryen.NeFloat32:
+                        case binaryen.NeFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifstricteq(ifend);
+                            break;
+                        case binaryen.LtSInt32:
+                        case binaryen.LtFloat32:
+                        case binaryen.LtFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifnlt(ifend);
+                            break;
+                        case binaryen.LtUInt32:
+                            traverse(cond.left);
+                            builder.convert_u();
+                            traverse(cond.right);
+                            builder.convert_u();
+                            builder.ifnlt(ifend);
+                            break;
+                        case binaryen.LeSInt32:
+                        case binaryen.LeFloat32:
+                        case binaryen.LeFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifnle(ifend);
+                            break;
+                        case binaryen.LeUInt32:
+                            traverse(cond.left);
+                            builder.convert_u();
+                            traverse(cond.right);
+                            builder.convert_u();
+                            builder.ifnle(ifend);
+                            break;
+                        case binaryen.GtSInt32:
+                        case binaryen.GtFloat32:
+                        case binaryen.GtFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifngt(ifend);
+                            break;
+                        case binaryen.GtUInt32:
+                            traverse(cond.left);
+                            builder.convert_u();
+                            traverse(cond.right);
+                            builder.convert_u();
+                            builder.ifngt(ifend);
+                            break;
+                        case binaryen.GeSInt32:
+                        case binaryen.GeFloat32:
+                        case binaryen.GeFloat64:
+                            traverse(cond.left);
+                            traverse(cond.right);
+                            builder.ifnge(ifend);
+                            break;
+                        case binaryen.GeUInt32:
+                            traverse(cond.left);
+                            builder.convert_u();
+                            traverse(cond.right);
+                            builder.convert_u();
+                            builder.ifnge(ifend);
+                            break;
+                        default:
+                            traverse(info.condition);
+                            builder.iffalse(ifend);
+                    }
+                } else if (cond.id == binaryen.UnaryId) {
+                    switch(cond.op) {
+                        case binaryen.EqZInt32:
+                            traverse(cond.value);
+                            builder.iftrue(ifend);
+                            break;
+                        default:
+                            traverse(info.condition);
+                            builder.iffalse(ifend);
+                    }
+                } else {
+                    traverse(info.condition);
+                    builder.iffalse(ifend);
+                }
+
+                traverse(info.ifTrue);
+                if (info.ifFalse) {
+                    let elseend = new Label();
+                    builder.jump(elseend);
+                    builder.label(ifend);
+                    traverse(info.ifFalse);
+                    builder.label(elseend);
+                } else {
+                    builder.label(ifend);
+                }
+            },
+        
+            visitLoop: (info) => {
+                let start = new Label(info.name);
+                labelStack.push(start);
+                builder.label(start);
+                traverse(info.body);
+                labelStack.pop();
+            },
+        
+            visitBreak: (info) => {
+                let label = labelByName(info.name);
+                if (info.value) {
+                    traverse(info.value);
+                }
+                if (info.condition) {
+                    let cond = binaryen.getExpressionInfo(info.condition);
+                    if (cond.id === binaryen.BinaryId) {
+                        // Note these are backwards from 'if' :)
+                        switch (cond.op) {
+                            case binaryen.EqInt32:
+                            case binaryen.EqFloat32:
+                            case binaryen.EqFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.ifstricteq(label);
+                                break;
+                            case binaryen.NeInt32:
+                            case binaryen.NeFloat32:
+                            case binaryen.NeFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.ifstrictne(label);
+                                break;
+                            case binaryen.LtSInt32:
+                            case binaryen.LtFloat32:
+                            case binaryen.LtFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.iflt(label);
+                                break;
+                            case binaryen.LtUInt32:
+                                traverse(cond.left);
+                                builder.convert_u();
+                                traverse(cond.right);
+                                builder.convert_u();
+                                builder.iflt(label);
+                                break;
+                            case binaryen.LeSInt32:
+                            case binaryen.LeFloat32:
+                            case binaryen.LeFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.ifle(label);
+                                break;
+                            case binaryen.LeUInt32:
+                                traverse(cond.left);
+                                builder.convert_u();
+                                traverse(cond.right);
+                                builder.convert_u();
+                                builder.ifle(label);
+                                break;
+                            case binaryen.GtSInt32:
+                            case binaryen.GtFloat32:
+                            case binaryen.GtFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.ifgt(label);
+                                break;
+                            case binaryen.GtUInt32:
+                                traverse(cond.left);
+                                builder.convert_u();
+                                traverse(cond.right);
+                                builder.convert_u();
+                                builder.ifgt(label);
+                                break;
+                            case binaryen.GeSInt32:
+                            case binaryen.GeFloat32:
+                            case binaryen.GeFloat64:
+                                traverse(cond.left);
+                                traverse(cond.right);
+                                builder.ifge(label);
+                                break;
+                            case binaryen.GeUInt32:
+                                traverse(cond.left);
+                                builder.convert_u();
+                                traverse(cond.right);
+                                builder.convert_u();
+                                builder.ifge(label);
+                                break;
+
+                            default:
+                                traverse(info.condition);
+                                builder.iftrue(label);
+                                break;
+                        }
+                        return;
+                    } else if (cond.id === binaryen.UnaryId) {
+                        if (cond.op === binaryen.EqZInt32) {
+                            traverse(cond.value);
+                            builder.iffalse(label);
+                            return;
+                        }
+                    }
+
+                    traverse(info.condition);
+                    builder.iftrue(label);
+                } else {
+                    builder.jump(label);
+                }
+            },
+
+            visitSwitch: (info, expr) => {
+                if (info.value) {
+                    throw new Error('not sure what to do with info.value?')
+                    traverse(info.value);
+                }
+                traverse(info.condition);
+                let default_label = labelByName(info.defaultName);
+
+                // currently broken upstream
+                let names = info.names;
+                // so we'll rebuild them. stronger. faster. better.
+                let n = binaryen._BinaryenSwitchGetNumNames(expr);
+                for (let i = 0; i < n; i++) {
+                    let p = binaryen._BinaryenSwitchGetName(expr, i);
+                    let h = binaryen.HEAPU8;
+                    let s = '';
+                    for (let i = p; h[i] != 0; i++) {
+                        s += String.fromCharCode(h[i]);
+                    }
+                    names[i] = s;
+                }
+
+                let case_labels = names.map(labelByName);
+                builder.lookupswitch(default_label, case_labels);
+            },
+
+            visitCall: (info) => {
+                builder.getlocal_0(); // this argument
+                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                info.operands.forEach(traverse);
+                let method = abc.qname(privatens, abc.string('func$' + info.target));
+                switch (info.type) {
+                    case binaryen.none:
+                        builder.callpropvoid(method, info.operands.length);
+                        break;
+                    case binaryen.i32:
+                        builder.callproperty(method, info.operands.length);
+                        builder.convert_i();
+                        break;
+                    case binaryen.f32:
+                    case binaryen.f64:
+                        builder.callproperty(method, info.operands.length);
+                        builder.convert_d();
+                        break;
+                    default:
+                        throw new Error('unexpected type in call ' + info.type);
+                }
+            },
+
+            visitCallIndirect: (info) => {
+                builder.getlocal_0(); // this argument
+                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                builder.getproperty(abc.qname(privatens, abc.string('wasm$table')))
+                builder.coerce(abc.qname(pubns, abc.string('Array')));
+                traverse(info.target);
+                info.operands.forEach(traverse);
+                let pubset = abc.namespaceSet([pubns]);
+                let runtime = abc.multinameL(pubset);
+                switch (info.type) {
+                    case binaryen.none:
+                        builder.callpropvoid(runtime, info.operands.length);
+                        break;
+                    case binaryen.i32:
+                        builder.callproperty(runtime, info.operands.length);
+                        builder.convert_i();
+                        break;
+                    case binaryen.f32:
+                    case binaryen.f64:
+                        builder.callproperty(runtime, info.operands.length);
+                        builder.convert_d();
+                        break;
+                    default:
+                        throw new Error('unexpected type in indirect call ' + info.type);
+                }
+            },
+
+            visitLocalGet: (info) => {
+                // AVM locals are shifted over by one versus WebAssembly,
+                // because the 0 index is used for the 'this' parameter.
+                let i = info.index + 1;
+                builder.getlocal(i);
+            },
+
+            visitLocalSet: (info) => {
+                // AVM locals are shifted over by one versus WebAssembly,
+                // because the 0 index is used for the 'this' parameter.
+                let i = info.index + 1;
+
+                let value = binaryen.getExpressionInfo(info.value);
+                if (value.id == binaryen.BinaryId && value.op == binaryen.AddInt32) {
+                    let left = binaryen.getExpressionInfo(value.left);
+                    let right = binaryen.getExpressionInfo(value.right);
+                    if (left.id == binaryen.LocalGetId &&
+                        left.index == info.index &&
+                        right.id == binaryen.ConstId
+                    ) {
+                        if (right.value === 1) {
+                            builder.inclocal_i(i);
+                            if (info.isTee) {
+                                builder.getlocal(i);
+                            }
+                            return;
+                        } else if (right.value === -1) {
+                            builder.declocal_i(i);
+                            if (info.isTee) {
+                                builder.getlocal(i);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                traverse(info.value);
+                if (info.isTee) {
+                    builder.dup();
+                }
+                builder.setlocal(i);
+            },
+
+            visitGlobalGet: (info) => {
+                let globalId = mod.getGlobal(info.name);
+                let globalInfo = binaryen.getGlobalInfo(globalId);
+
+                let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
+                let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                addGlobal(name, type, globalInfo);
+        
+                builder.getlocal_0(); // 'this' param
+                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                builder.getproperty(name);
+                switch (info.type) {
+                    case binaryen.i32:
+                        builder.convert_i();
+                        break;
+                    case binaryen.f32:
+                    case binaryen.f64:
+                        builder.convert_d();
+                        break;
+                }
+            },
+
+            visitGlobalSet: (info) => {
+                let globalId = mod.getGlobal(info.name);
+                let globalInfo = binaryen.getGlobalInfo(globalId);
+
+                let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
+                let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                addGlobal(name, type, globalInfo);
+
+                builder.getlocal_0();
+                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                traverse(info.value);
+                builder.setproperty(name);
+            },
+
+            visitLoad: (info) => {
+                // todo: can be isAtomic
+                // todo: need to worry about alignment hints or no?
+
+                traverse(info.ptr);
+
+                if (info.offset > 0) {
+                    if (info.offset >= -128 && info.offset <= 127) {
+                        builder.pushbyte(info.offset);
+                    } else if (info.offset >= -32768 && info.offset <= 32767) {
+                        builder.pushshort(info.offset);
+                    } else {
+                        builder.pushint(info.offset);
+                    }
+                    builder.add_i();
+                }
+
+                if (traceMem && shouldTrace(funcName)) {
+                    builder.dup();
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.swap();
+                    builder.pushnull();
+                    builder.swap();
+                    builder.pushstring(abc.string(' load ptr - x' + info.bytes));
+                    builder.add();
+                    builder.call(1);
+                    builder.pop();
+                }
+
+                switch (info.type) {
+                    case binaryen.i32:
+                        switch (info.bytes) {
+                            case 1:
+                                builder.li8();
+                                if (info.isSigned) {
+                                    builder.sxi8();
+                                }
+                                break;
+                            case 2:
+                                builder.li16();
+                                if (info.isSigned) {
+                                    builder.sxi16();
+                                }
+                                break;
+                            case 4:
+                                builder.li32();
+                                break;
+                        }
+                        break;
+                    case binaryen.f32:
+                        builder.lf32();
+                        break;
+                    case binaryen.f64:
+                        builder.lf64();
+                        break;
+                    default:
+                        throw new Error('unexpected load type ' + info.type);
+                }
+
+                if (traceMem && shouldTrace(funcName)) {
+                    builder.dup();
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.swap();
+                    builder.pushnull();
+                    builder.swap();
+                    builder.pushstring(abc.string(' load val - x' + info.bytes));
+                    builder.add();
+                    builder.call(1);
+                    builder.pop();
+                }
+            },
+
+            visitStore: (info) => {
+                // todo: can be isAtomic
+                // todo: need to worry about alignment hints or no?
+
+                traverse(info.ptr);
+                if (info.offset > 0) {
+                    if (info.offset >= -128 && info.offset <= 127) {
+                        builder.pushbyte(info.offset);
+                    } else if (info.offset >= -32768 && info.offset <= 32767) {
+                        builder.pushshort(info.offset);
+                    } else {
+                        builder.pushint(info.offset);
+                    }
+                    builder.add_i();
+                }
+
+                if (traceMem && shouldTrace(funcName)) {
+                    builder.dup();
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.swap();
+                    builder.pushnull();
+                    builder.swap();
+                    builder.pushstring(abc.string(' store ptr - x' + info.bytes));
+                    builder.add();
+                    builder.call(1);
+                    builder.pop();
+                }
+
+                traverse(info.value);
+
+                if (traceMem && shouldTrace(funcName)) {
+                    builder.dup();
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.swap();
+                    builder.pushnull();
+                    builder.swap();
+                    builder.pushstring(abc.string(' store val - x' + info.bytes));
+                    builder.add();
+                    builder.call(1);
+                    builder.pop();
+                }
+
+                // Flash's si32/si16/si8/sf32/sf64 instructions take
+                // value then pointer, but Wasm stores take pointer
+                // then value. For now do a stack swap but it might
+                // be better to reorder the items when we can confirm
+                // there's no side effects.
+                builder.swap();
+
+                let value = binaryen.getExpressionInfo(info.value);
+                switch (value.type) {
+                    case binaryen.i32:
+                        switch (info.bytes) {
+                            case 1: builder.si8(); break;
+                            case 2: builder.si16(); break;
+                            case 4: builder.si32(); break;
+                            default:
+                                throw new Error('unexpected store size ' + info.bytes);
+                        }
+                        break;
+                    case binaryen.f32:
+                        builder.sf32();
+                        break;
+                    case binaryen.f64:
+                        builder.sf64();
+                        break;
+                    default:
+                        throw new Error('unexpected store type ' + value.type);
+                }
+            },
+
+            visitConst: (info) => {
+                switch (info.type) {
+                    case binaryen.i32:
+                        if (info.value >= -128 && info.value <= 127) {
+                            builder.pushbyte(info.value);
+                        } else if (info.value >= -32768 && info.value <= 32767) {
+                            builder.pushshort(info.value);
+                        } else {
+                            builder.pushint(info.value);
+                        }
+                        break;
+                    case binaryen.f32:
+                    case binaryen.f64:
+                        if (isNaN(info.value)) {
+                            builder.pushnan();
+                        } else {
+                            builder.pushdouble(info.value);
+                        }
+                        break;
+                    default:
+                        throw new Error('unexpected const type ' + info.type);
+                }
+            },
+
+            visitUnary: (info) => {
+                switch (info.op) {
+                    // int
+                    case binaryen.ClzInt32:
+                        builder.getlocal_0(); // 'this'
+                        traverse(info.value);
+                        builder.callproperty(abc.qname(privatens, abc.string('wasm$clz32')), 1);
+                        builder.convert_i();
+                        break;
+                    case binaryen.CtzInt32:
+                    case binaryen.PopcntInt32:
+                        throw new Error('i32 unary should be removed');
+                        break;
+
+                    // float
+                    case binaryen.NegFloat32:
+                    case binaryen.NegFloat64:
+                        traverse(info.value);
+                        builder.negate();
+                        break;
+                    case binaryen.AbsFloat32:
+                    case binaryen.AbsFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.value);
+                        builder.callproperty(abc.qname(pubns, abc.string('abs')), 1);
+                        builder.convert_d();
+                        break;
+                    case binaryen.CeilFloat32:
+                    case binaryen.CeilFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.value);
+                        builder.callproperty(abc.qname(pubns, abc.string('ceil')), 1);
+                        builder.convert_d();
+                        break;
+                    case binaryen.FloorFloat32:
+                    case binaryen.FloorFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.value);
+                        builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
+                        builder.convert_d();
+                        break;
+                    case binaryen.TruncFloat32:
+                    case binaryen.TruncFloat64:
+                        throw new Error('trunc should be removed');
+                        break;
+                    case binaryen.NearestFloat32:
+                    case binaryen.NearestFloat64:
+                        throw new Error('nearest should be removed');
+                        break;
+                    case binaryen.SqrtFloat32:
+                    case binaryen.SqrtFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.value);
+                        builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
+                        builder.convert_d();
+                        break;
+
+
+                    // relational
+                    case binaryen.EqZInt32:
+                        traverse(info.value);
+                        builder.pushbyte(0);
+                        builder.strictequals();
+                        builder.convert_i();
+                        break;
+
+                    // float to int
+                    case binaryen.TruncSFloat32ToInt32:
+                    case binaryen.TruncSFloat64ToInt32:
+                        traverse(info.value);
+                        builder.convert_i(); // ??? check rounding
+                        break;
+                    case binaryen.TruncUFloat32ToInt32:
+                    case binaryen.TruncUFloat64ToInt32:
+                        traverse(info.value);
+                        builder.convert_u(); // ??? check rounding
+                        break;
+                    case binaryen.ReinterpretFloat32:
+                        builder.getlocal_0(); // 'this'
+                        traverse(info.value);
+                        builder.callpropvoid(abc.qname(pubns, abc.string('wasm2js_scratch_store_f32')), 1);
+
+                        builder.getlocal_0(); // 'this'
+                        builder.pushbyte(0);
+                        builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 1);
+                        builder.convert_i();
+
+                        break;
+                    case binaryen.ReinterpretFloat64:
+                        throw new Error('reinterpret f64 should be removed already');
+                        break;
+                    case binaryen.ConvertSInt32ToFloat32:
+                    case binaryen.ConvertSInt32ToFloat64:
+                        traverse(info.value);
+                        builder.convert_d();
+                        break;
+                    case binaryen.ConvertUInt32ToFloat32:
+                    case binaryen.ConvertUInt32ToFloat64:
+                        traverse(info.value);
+                        builder.convert_u();
+                        builder.convert_d();
+                        break;
+                    case binaryen.PromoteFloat32:
+                    case binaryen.DemoteFloat64:
+                        // nop for now
+                        traverse(info.value);
+                        break;
+                    case binaryen.ReinterpretInt32:
+                        builder.getlocal_0(); // 'this'
+                        builder.pushbyte(0);
+                        traverse(info.value);
+                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 2);
+
+                        builder.getlocal_0(); // 'this'
+                        builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
+                        builder.convert_d();
+
+                        break;
+                    case binaryen.ReinterpretInt64:
+                        throw new Error('reinterpret int should be removed already');
+                        break;
+                    
+                    default:
+                        throw new Error('unhandled unary op ' + info.op);
+                }
+            },
+
+            visitBinary: (info) => {
+                let right;
+                switch (info.op) {
+                    // int or float
+                    case binaryen.AddInt32:
+                        traverse(info.left);
+                        right = binaryen.getExpressionInfo(info.right);
+                        if (right.id == binaryen.ConstId && right.value == 1) {
+                            builder.increment_i();
+                        } else if (right.id == binaryen.ConstId && right.value == -1) {
+                            builder.decrement_i();
+                        } else {
+                            traverse(info.right);
+                            builder.add_i();
+                        }
+                        break;
+                    case binaryen.SubInt32:
+                        traverse(info.left);
+                        right = binaryen.getExpressionInfo(info.right);
+                        if (right.id == binaryen.ConstId && right.value == 1) {
+                            builder.decrement_i();
+                        } else if (right.id == binaryen.ConstId && right.value == -1) {
+                            builder.increment_i();
+                        } else {
+                            traverse(info.right);
+                            builder.subtract_i();
+                        }
+                        break;
+                    case binaryen.MulInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.multiply_i();
+                        break;
+
+                    // int
+                    case binaryen.DivSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.divide();
+                        builder.convert_i();
+                        break;
+                    case binaryen.DivUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.divide();
+                        builder.convert_u();
+                        break;
+                    case binaryen.RemSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.modulo();
+                        builder.convert_i();
+                        break;
+                    case binaryen.RemUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.modulo();
+                        builder.convert_u();
+                        break;
+
+                    case binaryen.AndInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.bitand();
+                        break;
+                    case binaryen.OrInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.bitor();
+                        break;
+                    case binaryen.XorInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.bitxor();
+                        break;
+                    case binaryen.ShlInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.lshift();
+                        break;
+                    case binaryen.ShrUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.urshift();
+                        builder.convert_i();
+                        if (traceMem && shouldTrace(funcName)) {
+                            builder.dup();
+                            builder.getlex(abc.qname(pubns, abc.string('trace')));
+                            builder.swap();
+                            builder.pushnull();
+                            builder.swap();
+                            builder.pushstring(abc.string(' urshift result'));
+                            builder.add();
+                            builder.call(1);
+                            builder.pop();
+                        }
+                        break;
+                    case binaryen.ShrSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.rshift();
+                        break;
+                    case binaryen.RotLInt32:
+                        throw new Error('rotate should be removed already');
+                        break;
+                    case binaryen.RotRInt32:
+                        throw new Error('rotate should be removed already');
+                        break;
+
+                    // relational ops
+                    // int or float
+                    case binaryen.EqInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.strictequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.NeInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.strictequals();
+                        builder.not();
+                        builder.convert_i();
+                        break;
+                    // int
+                    case binaryen.LtSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.lessthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.LtUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.lessthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.LeSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.lessequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.LeUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.lessequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GtSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.greaterthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GtUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.greaterthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GeSInt32:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.greaterequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GeUInt32:
+                        traverse(info.left);
+                        builder.convert_u();
+                        traverse(info.right);
+                        builder.convert_u();
+                        builder.greaterequals();
+                        builder.convert_i();
+                        break;
+
+                    // int or float
+                    case binaryen.AddFloat32:
+                    case binaryen.AddFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.add();
+                        break;
+                    case binaryen.SubFloat32:
+                    case binaryen.SubFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.subtract();
+                        break;
+                    case binaryen.MulFloat32:
+                    case binaryen.MulFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.multiply();
+                        break;
+
+                    // float
+                    case binaryen.DivFloat32:
+                    case binaryen.DivFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.divide();
+                        break;
+                    case binaryen.CopySignFloat32:
+                    case binaryen.CopySignFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        throw new Error('copy sign should be removed already');
+                        break;
+                    case binaryen.MinFloat32:
+                    case binaryen.MinFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
+                        builder.convert_d();
+                        break;
+                    case binaryen.MaxFloat32:
+                    case binaryen.MaxFloat64:
+                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
+                        builder.convert_d();
+                        break;
+
+                    // relational ops
+                    // int or float
+                    case binaryen.EqFloat32:
+                    case binaryen.EqFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.strictequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.NeFloat32:
+                    case binaryen.NeFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.strictequals();
+                        builder.not();
+                        builder.convert_i();
+                        break;
+                    case binaryen.LtFloat32:
+                    case binaryen.LtFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.lessthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.LeFloat32:
+                    case binaryen.LeFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.lessequals();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GtFloat32:
+                    case binaryen.GtFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.greaterthan();
+                        builder.convert_i();
+                        break;
+                    case binaryen.GeFloat32:
+                    case binaryen.GeFloat64:
+                        traverse(info.left);
+                        traverse(info.right);
+                        builder.greaterequals();
+                        builder.convert_i();
+                        break;
+                    
+                    default:
+                        throw new Error('unexpected binary op' + info);
+                }
+            },
+
+            visitSelect: (info) => {
+                traverse(info.ifTrue);
+                traverse(info.ifFalse);
+                traverse(info.condition);
+                let label = new Label();
+                builder.iftrue(label);
+                builder.swap();
+                builder.label(label);
+                builder.pop();
+            },
+
+            visitDrop: (info) => {
+                traverse(info.value);
+                builder.pop();
+            },
+
+            visitReturn: (info) => {
+                if (info.value) {
+                    traverse(info.value);
+                    if (traceFuncs && shouldTrace(funcName)) {
+                        builder.dup();
+                        builder.getlex(abc.qname(pubns, abc.string('trace')));
+                        builder.swap();
+                        builder.pushnull();
+                        builder.swap();
+                        builder.pushstring(abc.string(' returned from ' + funcName));
+                        builder.add();
+                        builder.call(1);
+                        builder.pop();
+                    }
+                    builder.returnvalue();
+                } else {
+                    if (traceFuncs && shouldTrace(funcName)) {
+                        builder.getlex(abc.qname(pubns, abc.string('trace')));
+                        builder.pushnull();
+                        builder.pushstring(abc.string('void returned from ' + funcName));
+                        builder.call(1);
+                        builder.pop();
+                    }
+                    builder.returnvoid();
+                }
+            },
+
+            visitHost: (info) => {
+                switch (info.op) {
+                    case binaryen.MemoryGrow:
+                        builder.getlocal_0(); // 'this'
+                        traverse(info.operands[0]);
+                        builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_grow')), 1);
+                        builder.convert_i();
+                        break;
+                    case binaryen.MemorySize:
+                        builder.getlocal_0(); // 'this'
+                        builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_size')), 0);
+                        builder.convert_i();
+                        break;
+                    default:
+                        throw new ('unknown host operation ' + info.op);
+                }
+            },
+
+            visitNop: (info) => {
+                builder.nop();
+            },
+
+            visitUnreachable: (info) => {
+                builder.getlex(abc.qname(pubns, abc.string('Error')));
+                builder.pushstring(abc.string('unreachable'));
+                builder.construct(1);
+                builder.throw();
+            }
+        };
+
+        let info = binaryen.getFunctionInfo(func);
+        var funcName = info.name; // var to use above. sigh
+        let argTypes = binaryen.expandType(info.params).map(avmType);
+        var resultType = avmType(info.results);
+        let varTypes = info.vars.map(avmType);
+        let localTypes = argTypes.concat(varTypes);
+
+        let lineno = 1;
+        if (debug) {
+            builder.debugfile(abc.string('func$' + info.name));
+        }
+        function traverse(expr) {
+            if (debug) {
+                builder.debugline(lineno);
+            }
+            if (trace && shouldTrace(funcName)) {
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.pushnull();
+                builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
+                builder.call(1);
+                builder.pop();
+            }
+            lineno++;
+            walkExpression(expr, callbacks);
+        }
+
+        console.log('\n\nfunc ' + info.name);
+        console.log('  (' + argTypes.join(', ') + ')');
+        console.log('  -> ' + resultType);
+        if (info.vars.length > 0) {
+            console.log('  var ' + varTypes.join(', '));
+        }
+        console.log('{');
+
+        if (info.module === '') {
+            // Regular function
+
+            if (traceFuncs && shouldTrace(funcName)) {
+                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.pushnull();
+                builder.pushstring(abc.string(info.name + ': '));
+                for (let n = 0; n < argTypes.length; n++) {
+                    builder.getlocal(n + 1);
+                }
+                builder.newarray(argTypes.length);
+                builder.pushstring(abc.string(', '));
+                builder.callproperty(abc.qname(builtinns, abc.string('join')), 1);
+                builder.add();
+                builder.call(1);
+                builder.pop();
+            }
+
+            // Initialize local vars to their correct type
+            let localBase = localTypes.length - varTypes.length;
+            for (let i = localBase; i < localTypes.length; i++) {
+                let type = localTypes[i];
+                let index = i + 1;
+                switch (type) {
+                    case 'int':
+                        builder.pushbyte(0);
+                        builder.setlocal(index);
+                        break;
+                    case 'Number':
+                        builder.pushdouble(0);
+                        builder.setlocal(index);
+                        break;
+                    default:
+                        throw new Error('unexpected local type ' + type);
+                }
+            }
+
+            if (info.body) {
+                traverse(info.body);
+            }
+
+            if (info.results == binaryen.none) {
+                // why dont we have one?
+                if (traceFuncs && shouldTrace(funcName)) {
+                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.pushnull();
+                    builder.pushstring(abc.string('void returned from ' + funcName));
+                    builder.call(1);
+                    builder.pop();
+                }
+                builder.returnvoid();
+            } else {
+                // we should already have one
+                //builder.returnvalue();
+            }
+        } else {
+            // Import function.
+            console.log('import from: ' + info.module + '.' + info.base);
+            let name = abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base));
+            instanceTraits.push(abc.trait({
+                name: name,
+                kind: Trait.Slot,
+                type_name: abc.qname(pubns, abc.string('Function'))
+            }));
+            imports.push(info);
+            builder.getlocal_0();
+            for (let index = 0; index < argTypes.length; index++) {
+                builder.getlocal(index + 1);
+            }
+            if (info.results == binaryen.none) {
+                builder.callpropvoid(name, argTypes.length);
+                attachDomainMemory(builder);
+                builder.returnvoid();
+            } else {
+                builder.callproperty(name, argTypes.length);
+                // it will be coerced to the correct type
+                attachDomainMemory(builder);
+                builder.returnvalue();
+            }
+        }
+
+        let method = abc.method({
+            name: abc.string(info.name),
+            return_type: abc.qname(pubns, abc.string(resultType)),
+            param_types: argTypes.map((type) => abc.qname(pubns, abc.string(type))),
+        });
+
+        abc.methodBody({
+            method,
+            local_count: localTypes.length + 1,
+            init_scope_depth: 3,
+            max_scope_depth: 3,
+            max_stack: builder.max_stack,
+            code: builder.toBytes()
+        });
+
+        instanceTraits.push(abc.trait({
+            name: abc.qname(privatens, abc.string('func$' + info.name)),
+            kind: Trait.Method | Trait.Final,
+            disp_id: method, // compiler-assigned, so use the same one
+            method
+        }));
+
+        console.log('}');
+
+        // @fixme we must also add it to the class
+
+    }
+
+    function binaryString(data) {
+        let s = '';
+        for (let byte of new Uint8Array(data)) {
+            s += String.fromCharCode(0xe000 + byte);
+        }
+        return s;
+    }
+
     binaryen.setOptimizeLevel(3); // yes, this is global.
     mod.runPasses([
         'legalize-js-interface', // done by wasm2js to change interface types
@@ -1511,7 +1502,7 @@ function convertModule(mod) {
     // Convert functions to methods
     for (let i = 0; i < mod.getNumFunctions(); i++) {
         let func = mod.getFunctionByIndex(i);
-        convertFunction(func, abc, instanceTraits, addGlobal);
+        convertFunction(func);
     }
 
     // Internal functions o' doom
@@ -1840,14 +1831,13 @@ function convertModule(mod) {
 
     // Set it as domain memory
     function attachDomainMemory(op) {
-
         let flashsystemns = abc.namespace(Namespace.Namespace, abc.string('flash.system'));
-        op.getlocal_0();
-        op.coerce(abc.qname(pubns, abc.string('Instance')));
+        let appDomainName = abc.qname(flashsystemns, abc.string('ApplicationDomain'));
 
         // @fixme maybe save the domain for handier access
-        op.getlex(abc.qname(flashsystemns, abc.string('ApplicationDomain')));
+        op.getlex(appDomainName);
         op.getproperty(abc.qname(pubns, abc.string('currentDomain')));
+        op.coerce(appDomainName);
 
         op.getlocal_0();
         op.coerce(abc.qname(pubns, abc.string('Instance')));
