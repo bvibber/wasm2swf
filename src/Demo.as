@@ -15,7 +15,7 @@ package {
 
         private var tempRet0:int;
         private var scratch:ByteArray;
-        private var privateUse:Array;
+        private var privateUse:Vector.<String>;
         private var setjmpId:int;
 
         public function Demo() {
@@ -25,7 +25,7 @@ package {
             scratch.endian = Endian.LITTLE_ENDIAN;
             scratch.length = 8;
 
-            privateUse = [];
+            privateUse = new Vector.<String>(256);
             for (var i:int = 0; i < 256; i++) {
                 privateUse[i] = String.fromCharCode(0xe000 + i);
             }
