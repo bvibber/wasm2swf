@@ -292,8 +292,7 @@ function convertFunction(func, abc, instanceTraits, addGlobal) {
                 switch(cond.op) {
                     case binaryen.EqZInt32:
                         traverse(cond.value);
-                        builder.pushbyte(0);
-                        builder.ifstrictne(ifend);
+                        builder.iftrue(ifend);
                         break;
                     default:
                         traverse(info.condition);
