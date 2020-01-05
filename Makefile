@@ -42,7 +42,7 @@ FLEXSDK_ALL_DEP:=$(FLEXSDK_BASE_DEP) $(FLEXSDK_LIBS_DEP) $(FLEXSDK_PLAYERGLOBAL_
 demo/demo.swf : $(AS3_SOURCES) $(FLEXSDK_ALL_DEP)
 	FLEX_HOME="$(HERE)/$(FLEXSDK_DIR)" \
 	PLAYERGLOBAL_HOME="$(HERE)/$(PLAYERGLOBAL_BASE)" \
-	$(FLEXSDK_DIR)/bin/mxmlc -target-player 27.0 -o demo/demo.swf -- src/Demo.as
+	$(FLEXSDK_DIR)/bin/mxmlc -target-player 27.0 -debug -o demo/demo.swf -- src/Demo.as
 
 $(FLEXSDK_BASE_DEP) :
 	curl -o "$(FLEXSDK_ARCHIVE)" "$(FLEXSDK_URL)"

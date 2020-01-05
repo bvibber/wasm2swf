@@ -265,9 +265,10 @@ document.getElementById('decode_video').addEventListener('click', function() {
                         log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
                     }
                 }
-                var delta = performance.now() - start - drawDelta
+                var delta = performance.now() - start - drawDelta;
                 log(delta + ' ms to decode');
                 console.log(delta + ' ms to decode; ' + drawDelta + ' to extract/draw');
+                drawDelta = 0;
 
                 if (typeof ok === 'string') {
                     return 0;
