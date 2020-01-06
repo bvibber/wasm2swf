@@ -13,14 +13,15 @@ const {SWFFileBuilder} = require('./swf');
 
 function help() {
     console.error(`wasm2swf --sprite -o outfile.swf infile.wasm\n`);
-    console.error(`  -o outfile.swf save output as a loadable .swf movie`);
-    console.error(`  -o outfile.abc save output as raw .abc bytecode`);
-    console.error(`  --sprite       includes a stub Sprite class for Flash timeline`);
-    console.error(`  --debug        embed "line numbers" for debugging`);
-    console.error(`  --trace        emit trace() calls on every line`);
-    console.error(`  --trace-funcs  emit trace() calls on every function entry`);
-    console.error(`  --trace-mem    emit trace() calls on every load/store`);
-    console.error(`  --trace-only=x only trace on the given functions`);
+    console.error(`  -o outfile.swf           save output as a loadable .swf movie`);
+    console.error(`  -o outfile.abc           save output as raw .abc bytecode`);
+    console.error(`  --sprite                 includes a stub Sprite class for Flash timeline`);
+    console.error(`  --debug                  embed "line numbers" for debugging`);
+    console.error(`  --trace                  emit trace() calls on every expression`);
+    console.error(`  --trace-funcs            emit trace() calls on every function entry`);
+    console.error(`  --trace-mem              emit trace() calls on every load/store`);
+    console.error(`  --trace-only=f1,f2       only trace in the given functions`);
+    console.error(`  --trace-exclude=f1,f2    don't trace in the given functions`);
     console.error(`  --save-wast=outfile.wast save the transformed Wasm source`);
     console.error(`\n`);
 }
@@ -32,9 +33,13 @@ let trace = false;
 let traceFuncs = false;
 let traceMem = false;
 let traceOnly = [];
+let traceExclude = [];
 let saveWast;
 
 function shouldTrace(funcName) {
+    if (traceExclude.indexOf(funcName) !== -1) {
+        return false;
+    }
     if (traceOnly.length > 0) {
         return traceOnly.indexOf(funcName) !== -1;
     }
@@ -79,6 +84,10 @@ while (args.length > 0) {
         default:
             if (prefixed('--trace-only=')) {
                 traceOnly = val.split(',');
+                continue;
+            }
+            if (prefixed('--trace-exclude=')) {
+                excludeTrace = val.split(',');
                 continue;
             }
             if (prefixed('--save-wast=')) {
