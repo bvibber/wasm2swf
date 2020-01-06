@@ -27,12 +27,8 @@ package {
 
             byteChars = new Vector.<String>(256);
             for (var i:int = 0; i < 256; i++) {
-                if ((i & 0x7f) < 0x20) {
-                    // safety against bad escaping
-                    byteChars[i] = String.fromCharCode(0xf700 + i);
-                } else {
-                    byteChars[i] = String.fromCharCode(i);
-                }
+                // safety against bad escaping
+                byteChars[i] = String.fromCharCode(0xf700 + i);
             }
 
             callback = loaderInfo.parameters.callback;

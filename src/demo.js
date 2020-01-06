@@ -35,12 +35,8 @@ function log(str) {
 
 var byteChars = [];
 for (var i = 0; i < 256; i++) {
-    if (i & 0x7f < 0x20) {
-        // Avoid problematic escaping
-        byteChars[i] = String.fromCharCode(0xf700 + i);
-    } else {
-        byteChars[i] = String.fromCharCode(i);
-    }
+    // Avoid problematic escaping
+    byteChars[i] = String.fromCharCode(0xf700 + i);
 }
 
 function bytes2string(bytes) {
