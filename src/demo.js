@@ -5,6 +5,19 @@ var canvas = document.getElementById('player');
 var frameSink = YUVCanvas.attach(canvas);
 
 var videoSource = document.getElementById('video_source');
+var sources = ['ogg-theora', 'webm-vp8', 'webm-vp9', 'webm-av1'];
+var hash = document.location.hash;
+if (hash.length > 1) {
+    hash = hash.substr(1);
+}
+var index = sources.indexOf(hash);
+if (index !== -1) {
+    videoSource.selectedIndex = index;
+}
+videoSource.addEventListener('change', function() {
+    document.location.hash = '#' + videoSource.value;
+});
+
 var videoSources = {
     'ogg-theora': 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.ogv',
     'webm-vp8': 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.webm',
