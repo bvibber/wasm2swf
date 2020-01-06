@@ -667,8 +667,6 @@ function convertModule(mod) {
             visitCall: (info) => {
                 builder.getlocal_0(); // this argument
                 traceMsg('getlocal_0');
-                builder.coerce(instanceName);
-                traceMsg('coerce (Instance)');
                 info.operands.forEach(traverse);
                 let fname = 'func$' + info.target;
                 let method = abc.qname(privatens, abc.string(fname));
@@ -697,7 +695,6 @@ function convertModule(mod) {
 
             visitCallIndirect: (info) => {
                 builder.getlocal_0(); // this argument
-                builder.coerce(instanceName);
                 builder.getproperty(tableName);
                 builder.coerce(arrayName);
                 traverse(info.target);
@@ -788,8 +785,6 @@ function convertModule(mod) {
         
                 traceMsg('getlocal_0');
                 builder.getlocal_0(); // 'this' param
-                traceMsg('coerce Instance');
-                builder.coerce(instanceName);
                 traceMsg('getproperty global$' + globalInfo.name);
                 builder.getproperty(name);
                 switch (info.type) {
@@ -815,8 +810,6 @@ function convertModule(mod) {
 
                 traceMsg('getlocal_0');
                 builder.getlocal_0();
-                traceMsg('coerce Instance');
-                builder.coerce(instanceName);
                 traverse(info.value);
                 traceVal('setproperty global$' + globalInfo.name);
                 builder.setproperty(name);
@@ -1575,6 +1568,9 @@ function convertModule(mod) {
             }
 
             // Just to be safe, ensure the args are of proper type
+            builder.getlocal_0();
+            builder.coerce(instanceName);
+            builder.setlocal_0();
             let localBase = localTypes.length - varTypes.length;
             for (let i = 0; i < localBase; i++) {
                 let type = localTypes[i];
@@ -1986,6 +1982,10 @@ function convertModule(mod) {
 
     let iinitBody = abc.methodBuilder();
     iinitBody.getlocal_0();
+    iinitBody.coerce(instanceName);
+    iinitBody.setlocal_0();
+
+    iinitBody.getlocal_0();
     iinitBody.constructsuper(0);
 
     // Initialize globals
@@ -2038,7 +2038,6 @@ function convertModule(mod) {
         op.coerce(appDomainName);
 
         op.getlocal_0();
-        op.coerce(instanceName);
         op.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
         op.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
@@ -2049,7 +2048,6 @@ function convertModule(mod) {
         let segment = mod.getMemorySegmentInfoByIndex(i);
 
         iinitBody.getlocal_0();
-        iinitBody.coerce(instanceName);
         iinitBody.pushint_value(segment.byteOffset);
         iinitBody.pushstring(abc.string(binaryString(segment.data)));
         iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
@@ -2057,7 +2055,6 @@ function convertModule(mod) {
 
     // Initialize the table
     iinitBody.getlocal_0();
-    iinitBody.coerce(instanceName);
     iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
     iinitBody.construct(0);
     // @fixme implement the initializer segments
