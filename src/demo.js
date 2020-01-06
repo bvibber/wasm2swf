@@ -26,11 +26,6 @@ var codecs = {
     'webm-av1': 'ogv-decoder-video-av1.swf',
 };
 
-var videoPackets = [];
-var audioPackets = [];
-var videoCodec = null;
-var audioCodec = null;
-
 function log(str) {
     var text = document.createTextNode(str);
     var p = document.createElement('p');
@@ -80,6 +75,10 @@ function flashObject(url, readyCallback, moduleName) {
 }
 
 document.getElementById('decode_video').addEventListener('click', function() {
+    var videoPackets = [];
+    var audioPackets = [];
+    var videoCodec = null;
+    var audioCodec = null;
 
     var callbacks = {
         ready: function() {
