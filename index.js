@@ -1574,8 +1574,26 @@ function convertModule(mod) {
                 builder.pop();
             }
 
-            // Initialize local vars to their correct type
+            // Just to be safe, ensure the args are of proper type
             let localBase = localTypes.length - varTypes.length;
+            for (let i = 0; i < localBase; i++) {
+                let type = localTypes[i];
+                let index = i + 1;
+                builder.getlocal(index);
+                switch (type) {
+                    case 'int':
+                        builder.convert_i();
+                        break;
+                    case 'Number':
+                        builder.convert_d();
+                        break;
+                    default:
+                        throw new Error('unexpected local type ' + type);
+                }
+                builder.setlocal(index);
+            }
+
+            // Initialize local vars to their correct type
             for (let i = localBase; i < localTypes.length; i++) {
                 let type = localTypes[i];
                 let index = i + 1;
