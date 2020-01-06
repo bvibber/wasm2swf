@@ -1679,17 +1679,12 @@ function convertModule(mod) {
 
     }
 
-    let privateUse = new Array(256);
-    for (let i = 0; i < 256; i++) {
-        privateUse[i] = String.fromCharCode(0xe000 + i);
-    }
-
     function binaryString(data) {
         let bytes = new Uint8Array(data);
         let len = bytes.length;
         let arr = new Array(len);
         for (let i = 0; i < len; i++) {
-            arr[i] = privateUse[bytes[i]];
+            arr[i] = String.fromCharCode(bytes[i]);
         }
         return arr.join('');
     }
