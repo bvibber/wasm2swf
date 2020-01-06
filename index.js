@@ -679,13 +679,7 @@ function convertModule(mod) {
                 traverse(info.ptr);
 
                 if (info.offset > 0) {
-                    if (info.offset >= -128 && info.offset <= 127) {
-                        builder.pushbyte(info.offset);
-                    } else if (info.offset >= -32768 && info.offset <= 32767) {
-                        builder.pushshort(info.offset);
-                    } else {
-                        builder.pushint(info.offset);
-                    }
+                    builder.pushint_value(info.offset);
                     builder.add_i();
                 }
 
@@ -750,13 +744,7 @@ function convertModule(mod) {
 
                 traverse(info.ptr);
                 if (info.offset > 0) {
-                    if (info.offset >= -128 && info.offset <= 127) {
-                        builder.pushbyte(info.offset);
-                    } else if (info.offset >= -32768 && info.offset <= 32767) {
-                        builder.pushshort(info.offset);
-                    } else {
-                        builder.pushint(info.offset);
-                    }
+                    builder.pushint_value(info.offset);
                     builder.add_i();
                 }
 
@@ -818,20 +806,14 @@ function convertModule(mod) {
             visitConst: (info) => {
                 switch (info.type) {
                     case binaryen.i32:
-                        if (info.value >= -128 && info.value <= 127) {
-                            builder.pushbyte(info.value);
-                        } else if (info.value >= -32768 && info.value <= 32767) {
-                            builder.pushshort(info.value);
-                        } else {
-                            builder.pushint(info.value);
-                        }
+                        builder.pushint_value(info.value);
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
                         if (isNaN(info.value)) {
                             builder.pushnan();
                         } else {
-                            builder.pushdouble(info.value);
+                            builder.pushdouble(abc.double(info.value));
                         }
                         break;
                     default:
@@ -1390,7 +1372,7 @@ function convertModule(mod) {
                         builder.setlocal(index);
                         break;
                     case 'Number':
-                        builder.pushdouble(0);
+                        builder.pushdouble(abc.double(0));
                         builder.setlocal(index);
                         break;
                     default:
@@ -1803,17 +1785,11 @@ function convertModule(mod) {
                 iinitBody.getlocal_0();
                 switch (info.type) {
                     case binaryen.i32:
-                        if (info.value >= -128 && info.value <= 127) {
-                            iinitBody.pushbyte(info.value);
-                        } else if (info.value >= -37268 && info.value <= 32767) {
-                            iinitBody.pushshort(info.value);
-                        } else {
-                            iinitBody.pushint(info.value);
-                        }
+                        iinitBody.pushint_value(info.value);
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
-                        iinitBody.pushdouble(info.value);
+                        iinitBody.pushdouble(abc.double(info.value));
                         break;
                     default:
                         throw new Error('Unexpected constant initializer type');
@@ -1833,7 +1809,7 @@ function convertModule(mod) {
     iinitBody.pushstring(abc.string('littleEndian'));
     iinitBody.setproperty(abc.qname(pubns, abc.string('endian')));
     iinitBody.dup();
-    iinitBody.pushint(2 ** 26); // default to 16 MiB memory for the moment
+    iinitBody.pushint_value(2 ** 24); // default to 16 MiB memory for the moment
     iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
     iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
@@ -1860,7 +1836,7 @@ function convertModule(mod) {
 
         iinitBody.getlocal_0();
         iinitBody.coerce(abc.qname(pubns, abc.string('Instance')));
-        iinitBody.pushint(segment.byteOffset);
+        iinitBody.pushint_value(segment.byteOffset);
         iinitBody.pushstring(abc.string(binaryString(segment.data)));
         iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
     }
@@ -1887,7 +1863,7 @@ function convertModule(mod) {
 
             iinitBody.getlocal_0();
             iinitBody.getproperty(tableName);
-            iinitBody.pushint(index);
+            iinitBody.pushint_value(index);
             iinitBody.getlocal_0();
             iinitBody.getproperty(funcName);
             iinitBody.setproperty(runtimeName);

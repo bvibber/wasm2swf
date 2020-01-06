@@ -1531,19 +1531,18 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x1d);
     }
 
-    pushbyte(byte_value) {
-        if (byte_value > 127 || byte_value < -128) {
+    pushbyte(val) {
+        if (val > 127 || val < -128) {
             throw new Error('pushbyte out of bounds');
         }
-        this.log('pushbyte', byte_value);
+        this.log('pushbyte', val);
         this.u8(0x24);
-        this.u8(byte_value);
+        this.u8(val & 0xff);
         this.stackPush();
     }
 
-    pushdouble(double_value) {
-        let index = this.cpool.double(double_value);
-        this.log('pushdouble', index + ' (' + double_value + ')');
+    pushdouble(index) {
+        this.log('pushdouble', index + ' (' + this.cpool.doubles[index] + ')');
         this.u8(0x2f);
         this.u30(index);
         this.stackPush();
@@ -1555,12 +1554,21 @@ class MethodBuilder extends ABCBuilder {
         this.stackPush();
     }
 
-    pushint(int_value) {
-        let index = this.cpool.integer(int_value);
-        this.log('pushint', index + ' (' + int_value + ')');
+    pushint(index) {
+        this.log('pushint', index + ' (' + this.cpool.integers[index] + ')');
         this.u8(0x2d);
         this.u30(index);
         this.stackPush();
+    }
+
+    pushint_value(val) {
+        if (val >= -128 && val <= 127) {
+            this.pushbyte(val);
+        } else if (val >= -32768 && val <= 32767) {
+            this.pushshort(val);
+        } else {
+            this.pushint(this.cpool.integer(val));
+        }
     }
 
     pushnan() {
@@ -1581,18 +1589,18 @@ class MethodBuilder extends ABCBuilder {
         this.stackPush();
     }
 
-    pushshort(int_value) {
-        if (int_value > 32767 || int_value < -32768) {
+    pushshort(val) {
+        if (val > 32767 || val < -32768) {
             throw new Error('pushshort out of bounds');
         }
-        this.log('pushshort', int_value);
+        this.log('pushshort', val);
         this.u8(0x25);
-        this.u30(int_value & 0xffff);
+        this.u30(val & 0xffff);
         this.stackPush();
     }
 
     pushstring(index) {
-        this.log('pushstring', index);
+        this.log('pushstring', index, '("' + this.cpool.strings[index] + '")');
         this.u8(0x2c);
         this.u30(index);
         this.stackPush();
@@ -1604,9 +1612,8 @@ class MethodBuilder extends ABCBuilder {
         this.stackPush();
     }
 
-    pushuint(uint_value) {
-        let index = this.cpool.uinteger(uint_value);
-        this.log('pushuint', index + ' (' + uint_value + ')');
+    pushuint(index) {
+        this.log('pushuint', index + ' (' + this.cpool.uintegers[index] + ')');
         this.u8(0x2e);
         this.u30(index);
         this.stackPush();
