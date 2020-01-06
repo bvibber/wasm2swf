@@ -117,6 +117,7 @@ function convertModule(mod) {
     let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
     let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
     let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));
+    let builtinns = abc.namespace(Namespace.PackageNamespace, abc.string('http://adobe.com/AS3/2006/builtin'));
 
     let type_v = binaryen.createType([]);
     let type_j = binaryen.createType([binaryen.i64]);
@@ -1317,11 +1318,11 @@ function convertModule(mod) {
         let localTypes = argTypes.concat(varTypes);
 
         let lineno = 1;
-        if (debug) {
+        if (debug && shouldTrace(funcName)) {
             builder.debugfile(abc.string('func$' + info.name));
         }
         function traverse(expr) {
-            if (debug) {
+            if (debug && shouldTrace(funcName)) {
                 builder.debugline(lineno);
             }
             if (trace && shouldTrace(funcName)) {
