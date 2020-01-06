@@ -87,7 +87,7 @@ while (args.length > 0) {
                 continue;
             }
             if (prefixed('--trace-exclude=')) {
-                excludeTrace = val.split(',');
+                traceExclude = val.split(',');
                 continue;
             }
             if (prefixed('--save-wast=')) {
