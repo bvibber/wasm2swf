@@ -154,6 +154,7 @@ function convertModule(mod) {
     let type_v = binaryen.createType([]);
     let type_j = binaryen.createType([binaryen.i64]);
     let type_i = binaryen.createType([binaryen.i32]);
+    let type_ii = binaryen.createType([binaryen.i32, binaryen.i32]);
     let type_f = binaryen.createType([binaryen.f32]);
     let type_d = binaryen.createType([binaryen.f64]);
 
@@ -190,35 +191,14 @@ function convertModule(mod) {
         mod.addFunctionExport(name, name);
     }
 
-    function addScratch(store, load, params, ret) {
-        addImport(store, params, binaryen.void);
-        addImport(load, type_v, ret);
-    }
-
-    addScratch(
-        'wasm2js_scratch_store_i32',
-        'wasm2js_scratch_load_i32',
-        type_i,
-        binaryen.i32
-    );
-    addScratch(
-        'wasm2js_scratch_store_i64',
-        'wasm2js_scratch_load_i64',
-        type_j,
-        binaryen.i64
-    );
-    addScratch(
-        'wasm2js_scratch_store_f32',
-        'wasm2js_scratch_load_f32',
-        type_f,
-        binaryen.f32
-    );
-    addScratch(
-        'wasm2js_scratch_store_f64',
-        'wasm2js_scratch_load_f64',
-        type_d,
-        binaryen.f64
-    );
+    addImport('wasm2js_scratch_store_i32', type_ii, binaryen.void);
+    addImport('wasm2js_scratch_load_i32', type_i, binaryen.i32);
+    addImport('wasm2js_scratch_store_i64', type_j, binaryen.void);
+    addImport('wasm2js_scratch_load_i64', type_v, binaryen.i64);
+    addImport('wasm2js_scratch_store_f32', type_f, binaryen.void);
+    addImport('wasm2js_scratch_load_f32', type_v, binaryen.f32);
+    addImport('wasm2js_scratch_store_f64', type_d, binaryen.void);
+    addImport('wasm2js_scratch_load_f64', type_v, binaryen.f64);
 
     // Can we get this list from binaryen?
     let ids = [
@@ -1092,11 +1072,9 @@ function convertModule(mod) {
                         break;
                     case binaryen.ReinterpretInt32:
                         builder.getlocal_0(); // 'this'
-                        traceMsg('pushbyte 0');
-                        builder.pushbyte(0);
                         traverse(info.value);
-                        traceVal2('wasm2js_scratch_store_i32');
-                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 2);
+                        traceVal('wasm2js_scratch_store_i32');
+                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 1);
 
                         builder.getlocal_0(); // 'this'
                         traceMsg('wasm2js_scratch_load_f32');

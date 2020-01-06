@@ -233,7 +233,6 @@ package {
 
         private function run(func:String, args:Array):* {
             try {
-                trace('mem length: ' + memory.length);
                 return exports[func].apply(instance, args);
             } catch (e:String) {
                 return 'error: ' + e;
@@ -250,12 +249,12 @@ package {
             }
         }
 
-        private function emscripten_notify_memory_growth():void {
-            //
+        private function emscripten_notify_memory_growth(val:int):void {
+            trace('emscripten_notify_memory_growth called with ' + val);
         }
 
-        private function wasm2js_scratch_load_i32(i:int):int {
-            scratch.position = i << 2;
+        private function wasm2js_scratch_load_i32(index:int):int {
+            scratch.position = index << 2;
             return scratch.readInt();
         }
 
@@ -278,8 +277,8 @@ package {
             return scratch.readDouble();
         }
 
-        private function wasm2js_scratch_store_i32(i:int, val:int):void {
-            scratch.position = i << 2;
+        private function wasm2js_scratch_store_i32(index:int, val:int):void {
+            scratch.position = index << 2;
             scratch.writeInt(val);
         }
 
