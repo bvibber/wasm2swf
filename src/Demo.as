@@ -90,6 +90,7 @@ package {
                             exports.setThrew(env, val || 1);
                             throw new LongJmp();
                         },
+
                         saveSetjmp: function saveSetjmp(env:int, label:int, table:int, size:int):int {
                             var i:int = 0;
                             setjmpId++;
@@ -114,10 +115,10 @@ package {
                             return table;
                         },
                         testSetjmp: function testSetjmp(id:int, table:int, size:int):int {
-                            var i:int = 0, curr:int = 0;
+                            var i:int = 0;
                             while (i < size) {
                                 memory.position = table + (i << 3);
-                                curr = memory.readInt();
+                                var curr:int = memory.readInt();
                                 if (curr == 0) break;
                                 if (curr == id) {
                                     return memory.readInt();
