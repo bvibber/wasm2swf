@@ -533,6 +533,7 @@ function convertModule(mod) {
             visitBreak: (info) => {
                 let label = labelByName(info.name);
                 if (info.value) {
+                    throw new Error('not sure what to do with info.value?')
                     traverse(info.value);
                 }
                 if (info.condition) {
