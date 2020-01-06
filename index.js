@@ -1049,7 +1049,7 @@ function convertModule(mod) {
                     case binaryen.TruncUFloat32ToInt32:
                     case binaryen.TruncUFloat64ToInt32:
                         traverse(info.value);
-                        traceVal('convert_i (trunc u)');
+                        traceVal('convert_u (trunc u)');
                         builder.convert_u(); // ??? check rounding
                         break;
                     case binaryen.ReinterpretFloat32:
@@ -1140,7 +1140,7 @@ function convertModule(mod) {
                             traceVal('decrement_i');
                             builder.decrement_i();
                         } else if (right.id == binaryen.ConstId && right.value == -1) {
-                            traceVal('decrement_i');
+                            traceVal('increment_i');
                             builder.increment_i();
                         } else {
                             traverse(info.right);
@@ -1159,8 +1159,8 @@ function convertModule(mod) {
                     case binaryen.DivSInt32:
                         traverse(info.left);
                         traverse(info.right);
-                        builder.divide();
                         traceVal2('divide');
+                        builder.divide();
                         traceVal('convert_i');
                         builder.convert_i();
                         break;
@@ -1175,6 +1175,8 @@ function convertModule(mod) {
                         builder.divide();
                         traceVal('convert_u');
                         builder.convert_u();
+                        traceVal('convert_i');
+                        builder.convert_i();
                         break;
                     case binaryen.RemSInt32:
                         traverse(info.left);
@@ -1195,6 +1197,8 @@ function convertModule(mod) {
                         builder.modulo();
                         traceVal('convert_u');
                         builder.convert_u();
+                        traceVal('convert_i');
+                        builder.convert_i();
                         break;
 
                     case binaryen.AndInt32:
