@@ -289,6 +289,15 @@ function convertModule(mod) {
             return label;
         }
 
+        function pushOffset(offset) {
+            if (offset > 1) {
+                builder.pushint_value(offset);
+                builder.add_i();
+            } else if (offset === 1) {
+                builder.increment_i();
+            }
+        }
+
         const callbacks = {
             visitBlock: (info) => {
                 let name = info.name || 'block' + labelIndex++;
@@ -674,14 +683,9 @@ function convertModule(mod) {
 
             visitLoad: (info) => {
                 // todo: can be isAtomic
-                // todo: need to worry about alignment hints or no?
 
                 traverse(info.ptr);
-
-                if (info.offset > 0) {
-                    builder.pushint_value(info.offset);
-                    builder.add_i();
-                }
+                pushOffset(info.offset);
 
                 if (traceMem && shouldTrace(funcName)) {
                     builder.dup();
@@ -740,13 +744,9 @@ function convertModule(mod) {
 
             visitStore: (info) => {
                 // todo: can be isAtomic
-                // todo: need to worry about alignment hints or no?
 
                 traverse(info.ptr);
-                if (info.offset > 0) {
-                    builder.pushint_value(info.offset);
-                    builder.add_i();
-                }
+                pushOffset(info.offset);
 
                 if (traceMem && shouldTrace(funcName)) {
                     builder.dup();
