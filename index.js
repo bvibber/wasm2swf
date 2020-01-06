@@ -1754,6 +1754,7 @@ function convertModule(mod) {
             init_scope_depth: 3,
             max_scope_depth: 3,
             code: op.toBytes(),
+            max_stack: op.max_stack
         });
 
         instanceTraits.push(abc.trait({
@@ -1858,6 +1859,7 @@ function convertModule(mod) {
         let segment = mod.getMemorySegmentInfoByIndex(i);
 
         iinitBody.getlocal_0();
+        iinitBody.coerce(abc.qname(pubns, abc.string('Instance')));
         iinitBody.pushint(segment.byteOffset);
         iinitBody.pushstring(abc.string(binaryString(segment.data)));
         iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
@@ -1866,6 +1868,7 @@ function convertModule(mod) {
     // Initialize the table
     let tableName = abc.qname(privatens, abc.string('wasm$table'));
     iinitBody.getlocal_0();
+    iinitBody.coerce(abc.qname(pubns, abc.string('Instance')));
     iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
     iinitBody.construct(0);
     // @fixme implement the initializer segments
