@@ -1726,10 +1726,10 @@ function convertModule(mod) {
             op.getlocal_1();
             op.pushbyte(bits);
             op.rshift();
-            op.dup();
             op.setlocal_3();
             // if (y) {
             let endif = new Label();
+            op.getlocal_3();
             op.iffalse(endif);
             //   n -= bits;
             op.getlocal_2();
@@ -1747,10 +1747,10 @@ function convertModule(mod) {
         op.getlocal_1();
         op.pushbyte(1);
         op.rshift();
-        op.dup();
         op.setlocal_3();
         // if (y) {
         let endif = new Label();
+        op.getlocal_3();
         op.iffalse(endif);
         // return n - 2
         op.getlocal_2();
@@ -1771,6 +1771,7 @@ function convertModule(mod) {
             init_scope_depth: 3,
             max_scope_depth: 3,
             code: op.toBytes(),
+            max_stack: op.max_stack
         });
 
         instanceTraits.push(abc.trait({

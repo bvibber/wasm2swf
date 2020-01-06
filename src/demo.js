@@ -306,6 +306,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
         log('loading codec...');
         var codecSwf = flashObject('demo.swf', 'codecCallback', codecs[videoSource.value]);
         document.body.appendChild(codecSwf);
+        window.codecSwf = codecSwf; // for testing
     }
 
     log('loading demuxer...');
