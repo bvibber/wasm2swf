@@ -15,7 +15,7 @@ package {
 
         private var tempRet0:int;
         private var scratch:ByteArray;
-        private var privateUse:Vector.<String>;
+        private var byteChars:Vector.<String>;
         private var setjmpId:int;
 
         public function Demo() {
@@ -25,9 +25,14 @@ package {
             scratch.endian = Endian.LITTLE_ENDIAN;
             scratch.length = 8;
 
-            privateUse = new Vector.<String>(256);
+            byteChars = new Vector.<String>(256);
             for (var i:int = 0; i < 256; i++) {
-                privateUse[i] = String.fromCharCode(0xe000 + i);
+                if ((i & 0x7f) < 0x20) {
+                    // safety against bad escaping
+                    byteChars[i] = String.fromCharCode(0xe000 + i);
+                } else {
+                    byteChars[i] = String.fromCharCode(i);
+                }
             }
 
             callback = loaderInfo.parameters.callback;
@@ -333,7 +338,7 @@ package {
         private function readBinary(offset:int, len:int):String {
             var arr:Vector.<String> = new Vector.<String>(len);
             for (var i:int = 0; i < len; i++) {
-                arr[i] = privateUse[memory[offset + i]];
+                arr[i] = byteChars[memory[offset + i]];
             }
             return arr.join('');
         }
