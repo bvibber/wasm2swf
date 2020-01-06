@@ -135,6 +135,7 @@ function convertModule(mod) {
     let traceName = qname(pubns, 'trace');
     let exportsName = qname(pubns, 'exports');
     let lengthName = qname(pubns, 'length');
+    let charCodeAtName = qname(pubns, 'charCodeAt');
 
     let instanceName = qname(pubns, 'Instance'); // @fixme make this proper
 
@@ -143,7 +144,8 @@ function convertModule(mod) {
     let tableName = qname(privatens, 'wasm$table');
     let memoryGrowName = qname(privatens, 'wasm$memory_grow');
     let memorySizeName = qname(privatens, 'wasm$memory_size');
-
+    let memoryInitName = qname(privatens, 'wasm$memory_init');
+    let clz32Name = qname(privatens, 'wasm$clz32');
 
     let builtinns = ns(Namespace.PackageNamespace, 'http://adobe.com/AS3/2006/builtin');
     let joinName = qname(builtinns, 'join');
@@ -1772,8 +1774,8 @@ function convertModule(mod) {
         });
 
         instanceTraits.push(abc.trait({
-            name: abc.qname(privatens, abc.string('wasm$clz32')),
-            kind: Trait.Method,
+            name: clz32Name,
+            kind: Trait.Method | Trait.Final,
             method
         }));
     }
@@ -1823,7 +1825,7 @@ function convertModule(mod) {
 
         instanceTraits.push(abc.trait({
             name: memoryGrowName,
-            kind: Trait.Method,
+            kind: Trait.Method | Trait.Final,
             method
         }));
     }
@@ -1868,14 +1870,12 @@ function convertModule(mod) {
 
         instanceTraits.push(abc.trait({
             name: memorySizeName,
-            kind: Trait.Method,
+            kind: Trait.Method | Trait.Final,
             method
         }));
     }
     {
         // wasm$memory_init helper
-        abc.qname(privatens, 'wasm$memory_init')
-
         let method = abc.method({
             name: abc.string('memory_init'),
             return_type: voidName,
@@ -1892,7 +1892,7 @@ function convertModule(mod) {
 
         // local4 = len = str.length
         op.getlocal_2();
-        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.getproperty(lengthName);
         op.convert_i();
         op.setlocal(4);
 
@@ -1908,7 +1908,7 @@ function convertModule(mod) {
         // si8(str.charCodeAt(i), byteOffset + i)
         op.getlocal_2(); // str
         op.getlocal_3(); // i
-        op.callproperty(abc.qname(pubns, abc.string('charCodeAt')), 1);
+        op.callproperty(charCodeAtName, 1);
         op.convert_i();
         op.getlocal_1();
         op.getlocal_3();
@@ -1935,8 +1935,8 @@ function convertModule(mod) {
         });
 
         instanceTraits.push(abc.trait({
-            name: abc.qname(privatens, abc.string('wasm$memory_init')),
-            kind: Trait.Method,
+            name: memoryInitName,
+            kind: Trait.Method | Trait.Final,
             method
         }));
     }
