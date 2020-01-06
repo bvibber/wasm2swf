@@ -114,10 +114,42 @@ if (!(outfile.endsWith('.swf') || outfile.endsWith('.abc'))) {
 
 function convertModule(mod) {
     const abc = new ABCFileBuilder();
-    let pubns = abc.namespace(Namespace.PackageNamespace, abc.string(''));
-    let privatens = abc.namespace(Namespace.PrivateNs, abc.string(''));
-    let flashutilsns = abc.namespace(Namespace.Namespace, abc.string('flash.utils'));
-    let builtinns = abc.namespace(Namespace.PackageNamespace, abc.string('http://adobe.com/AS3/2006/builtin'));
+
+    function ns(kind, str) {
+        return abc.namespace(kind, abc.string(str));
+    }
+
+    function qname(ns, str) {
+        return abc.qname(ns, abc.string(str));
+    }
+
+    let pubns = ns(Namespace.PackageNamespace, '');
+    let voidName = qname(pubns, 'void');
+    let intName = qname(pubns, 'int');
+    let uintName = qname(pubns, 'uint');
+    let numberName = qname(pubns, 'Number');
+    let stringName = qname(pubns, 'String');
+    let objectName = qname(pubns,'Object');
+    let arrayName = qname(pubns, 'Array');
+    let mathName = qname(pubns, 'Math');
+    let traceName = qname(pubns, 'trace');
+    let exportsName = qname(pubns, 'exports');
+    let lengthName = qname(pubns, 'length');
+
+    let instanceName = qname(pubns, 'Instance'); // @fixme make this proper
+
+    let privatens = ns(Namespace.PrivateNs, '');
+    let memoryName = qname(privatens, 'wasm$memory');
+    let tableName = qname(privatens, 'wasm$table');
+    let memoryGrowName = qname(privatens, 'wasm$memory_grow');
+    let memorySizeName = qname(privatens, 'wasm$memory_size');
+
+
+    let builtinns = ns(Namespace.PackageNamespace, 'http://adobe.com/AS3/2006/builtin');
+    let joinName = qname(builtinns, 'join');
+
+    let flashutilsns = ns(Namespace.Namespace, 'flash.utils');
+    let byteArrayName = qname(flashutilsns, 'ByteArray');
 
     let type_v = binaryen.createType([]);
     let type_j = binaryen.createType([binaryen.i64]);
@@ -141,18 +173,9 @@ function convertModule(mod) {
             };
         }
     }
-    addGlobal(
-        abc.qname(pubns, abc.string('exports')),
-        abc.qname(pubns, abc.string('Object'))
-    );
-    addGlobal(
-        abc.qname(privatens, abc.string('wasm$memory')),
-        abc.qname(flashutilsns, abc.string('ByteArray'))
-    );
-    addGlobal(
-        abc.qname(privatens, abc.string('wasm$table')),
-        abc.qname(pubns, abc.string('Array'))
-    );
+    addGlobal(exportsName, objectName);
+    addGlobal(memoryName, byteArrayName);
+    addGlobal(tableName, arrayName);
 
     function addImport(name, params, ret) {
         mod.addFunctionImport(
@@ -290,22 +313,77 @@ function convertModule(mod) {
             return label;
         }
 
+        function traceMsg(msg, override=false) {
+            if ((trace || override) && shouldTrace(funcName)) {
+                builder.getlex(traceName);
+                builder.pushnull();
+                builder.pushstring(abc.string(msg));
+                builder.call(1);
+                builder.pop();
+            }
+        }
+
+        function traceVal(msg, override=false) {
+            if ((trace || override) && shouldTrace(funcName)) {
+                builder.dup(); // stack +1 (1)
+                builder.getlex(traceName); // +1 (2)
+                builder.swap();
+                builder.pushnull(); // +1 (3)
+                builder.swap();
+                builder.pushstring(abc.string(msg + ': ')); // +1 (4)
+                builder.swap();
+                builder.add(); // -2 +1 (3)
+                builder.call(1); // -3 + 1 (1)
+                builder.pop(); // -1 (0)
+            }
+        }
+
+        function traceVal2(msg, override=false) {
+            if ((trace || override) && shouldTrace(funcName)) {
+                traceLocals = 2;
+                builder.setlocal(localCount + 1);
+                builder.setlocal(localCount);
+                builder.getlocal(localCount);
+                builder.getlocal(localCount + 1);
+                builder.newarray(2); // -2 + 1 (1)
+                builder.pushstring(abc.string(', ')); // +1 (2)
+                builder.callproperty(joinName, 1); // -2 + 1 (1)
+                builder.getlex(traceName); // +1 (2)
+                builder.swap(); // (2)
+                builder.pushnull(); // +1 (3)
+                builder.swap(); //
+                builder.pushstring(abc.string(msg + ': ')); // +1 (4)
+                builder.swap(); //
+                builder.add(); // -2 +1 (3)
+                builder.call(1); // -3 +1 (1)
+                builder.pop(); // -1 (0)
+                builder.getlocal(localCount);
+                builder.getlocal(localCount + 1);
+            }
+        }
+
         function pushOffset(offset) {
             if (offset > 1) {
+                traceMsg('pushint_value (' + offset + ')');
                 builder.pushint_value(offset);
+                traceVal2('add_i');
                 builder.add_i();
             } else if (offset === 1) {
+                traceVal('increment_i');
                 builder.increment_i();
             }
         }
+
 
         const callbacks = {
             visitBlock: (info) => {
                 let name = info.name || 'block' + labelIndex++;
                 let label = new Label(name);
+                traceMsg('block: ' + name);
                 labelStack.push(label);
                 info.children.forEach(traverse);
                 if (label.used) {
+                    traceMsg('block label: ' + name);
                     builder.label(label);
                 }
                 labelStack.pop();
@@ -321,6 +399,7 @@ function convertModule(mod) {
                         case binaryen.EqFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifstrictne');
                             builder.ifstrictne(ifend);
                             break;
                         case binaryen.NeInt32:
@@ -328,6 +407,7 @@ function convertModule(mod) {
                         case binaryen.NeFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifstricteq');
                             builder.ifstricteq(ifend);
                             break;
                         case binaryen.LtSInt32:
@@ -335,13 +415,17 @@ function convertModule(mod) {
                         case binaryen.LtFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifnlt');
                             builder.ifnlt(ifend);
                             break;
                         case binaryen.LtUInt32:
                             traverse(cond.left);
+                            traceVal('convert_u');
                             builder.convert_u();
                             traverse(cond.right);
+                            traceVal('convert_u');
                             builder.convert_u();
+                            traceVal2('ifnlt');
                             builder.ifnlt(ifend);
                             break;
                         case binaryen.LeSInt32:
@@ -349,13 +433,17 @@ function convertModule(mod) {
                         case binaryen.LeFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifnle');
                             builder.ifnle(ifend);
                             break;
                         case binaryen.LeUInt32:
                             traverse(cond.left);
+                            traceVal('convert_u');
                             builder.convert_u();
                             traverse(cond.right);
+                            traceVal('convert_u');
                             builder.convert_u();
+                            traceVal2('ifnle');
                             builder.ifnle(ifend);
                             break;
                         case binaryen.GtSInt32:
@@ -363,13 +451,17 @@ function convertModule(mod) {
                         case binaryen.GtFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifngt');
                             builder.ifngt(ifend);
                             break;
                         case binaryen.GtUInt32:
                             traverse(cond.left);
+                            traceVal('convert_u');
                             builder.convert_u();
                             traverse(cond.right);
+                            traceVal('convert_u');
                             builder.convert_u();
+                            traceVal2('ifngt');
                             builder.ifngt(ifend);
                             break;
                         case binaryen.GeSInt32:
@@ -377,42 +469,54 @@ function convertModule(mod) {
                         case binaryen.GeFloat64:
                             traverse(cond.left);
                             traverse(cond.right);
+                            traceVal2('ifnge');
                             builder.ifnge(ifend);
                             break;
                         case binaryen.GeUInt32:
                             traverse(cond.left);
+                            traceVal('convert_u');
                             builder.convert_u();
                             traverse(cond.right);
+                            traceVal('convert_u');
                             builder.convert_u();
+                            traceVal2('ifnge');
                             builder.ifnge(ifend);
                             break;
                         default:
                             traverse(info.condition);
+                            traceVal('iffalse');
                             builder.iffalse(ifend);
                     }
                 } else if (cond.id == binaryen.UnaryId) {
                     switch(cond.op) {
                         case binaryen.EqZInt32:
                             traverse(cond.value);
+                            traceVal('iftrue');
                             builder.iftrue(ifend);
                             break;
                         default:
                             traverse(info.condition);
+                            traceVal('iffalse');
                             builder.iffalse(ifend);
                     }
                 } else {
                     traverse(info.condition);
+                    traceVal('iffalse');
                     builder.iffalse(ifend);
                 }
 
                 traverse(info.ifTrue);
                 if (info.ifFalse) {
                     let elseend = new Label();
+                    traceMsg('jump: elseend');
                     builder.jump(elseend);
+                    traceMsg('label: ifend');
                     builder.label(ifend);
                     traverse(info.ifFalse);
+                    traceMsg('label: elseend');
                     builder.label(elseend);
                 } else {
+                    traceMsg('label: ifend');
                     builder.label(ifend);
                 }
             },
@@ -421,6 +525,7 @@ function convertModule(mod) {
                 let start = new Label(info.name);
                 labelStack.push(start);
                 builder.label(start);
+                traceMsg('label (loop)');
                 traverse(info.body);
                 labelStack.pop();
             },
@@ -440,6 +545,7 @@ function convertModule(mod) {
                             case binaryen.EqFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('ifstricteq');
                                 builder.ifstricteq(label);
                                 break;
                             case binaryen.NeInt32:
@@ -447,6 +553,7 @@ function convertModule(mod) {
                             case binaryen.NeFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('ifstrictne');
                                 builder.ifstrictne(label);
                                 break;
                             case binaryen.LtSInt32:
@@ -454,13 +561,17 @@ function convertModule(mod) {
                             case binaryen.LtFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('iflt');
                                 builder.iflt(label);
                                 break;
                             case binaryen.LtUInt32:
                                 traverse(cond.left);
+                                traceVal('convert_u');
                                 builder.convert_u();
                                 traverse(cond.right);
+                                traceVal('convert_u');
                                 builder.convert_u();
+                                traceVal2('iflt');
                                 builder.iflt(label);
                                 break;
                             case binaryen.LeSInt32:
@@ -468,13 +579,17 @@ function convertModule(mod) {
                             case binaryen.LeFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('ifle');
                                 builder.ifle(label);
                                 break;
                             case binaryen.LeUInt32:
                                 traverse(cond.left);
+                                traceVal('convert_u');
                                 builder.convert_u();
                                 traverse(cond.right);
+                                traceVal('convert_u');
                                 builder.convert_u();
+                                traceVal2('ifle');
                                 builder.ifle(label);
                                 break;
                             case binaryen.GtSInt32:
@@ -482,13 +597,17 @@ function convertModule(mod) {
                             case binaryen.GtFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('ifgt');
                                 builder.ifgt(label);
                                 break;
                             case binaryen.GtUInt32:
                                 traverse(cond.left);
+                                traceVal('convert_u');
                                 builder.convert_u();
                                 traverse(cond.right);
+                                traceVal('convert_u');
                                 builder.convert_u();
+                                traceVal2('ifgt');
                                 builder.ifgt(label);
                                 break;
                             case binaryen.GeSInt32:
@@ -496,18 +615,23 @@ function convertModule(mod) {
                             case binaryen.GeFloat64:
                                 traverse(cond.left);
                                 traverse(cond.right);
+                                traceVal2('ifge');
                                 builder.ifge(label);
                                 break;
                             case binaryen.GeUInt32:
                                 traverse(cond.left);
+                                traceVal('convert_u');
                                 builder.convert_u();
                                 traverse(cond.right);
+                                traceVal('convert_u');
                                 builder.convert_u();
+                                traceVal2('ifge');
                                 builder.ifge(label);
                                 break;
 
                             default:
                                 traverse(info.condition);
+                                traceVal('iftrue');
                                 builder.iftrue(label);
                                 break;
                         }
@@ -515,14 +639,17 @@ function convertModule(mod) {
                     } else if (cond.id === binaryen.UnaryId) {
                         if (cond.op === binaryen.EqZInt32) {
                             traverse(cond.value);
+                            traceVal('iffalse');
                             builder.iffalse(label);
                             return;
                         }
                     }
 
                     traverse(info.condition);
+                    traceVal('iftrue');
                     builder.iftrue(label);
                 } else {
+                    traceMsg('jump');
                     builder.jump(label);
                 }
             },
@@ -550,25 +677,34 @@ function convertModule(mod) {
                 }
 
                 let case_labels = names.map(labelByName);
+                traceVal('lookupswitch');
                 builder.lookupswitch(default_label, case_labels);
             },
 
             visitCall: (info) => {
                 builder.getlocal_0(); // this argument
-                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                traceMsg('getlocal_0');
+                builder.coerce(instanceName);
+                traceMsg('coerce (Instance)');
                 info.operands.forEach(traverse);
-                let method = abc.qname(privatens, abc.string('func$' + info.target));
+                let fname = 'func$' + info.target;
+                let method = abc.qname(privatens, abc.string(fname));
                 switch (info.type) {
                     case binaryen.none:
+                        traceMsg(`callpropvoid ${fname} ${info.operands.length}`);
                         builder.callpropvoid(method, info.operands.length);
                         break;
                     case binaryen.i32:
+                        traceMsg(`callproperty ${fname} ${info.operands.length}`);
                         builder.callproperty(method, info.operands.length);
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
+                        traceMsg(`callproperty ${fname} ${info.operands.length}`);
                         builder.callproperty(method, info.operands.length);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     default:
@@ -578,24 +714,30 @@ function convertModule(mod) {
 
             visitCallIndirect: (info) => {
                 builder.getlocal_0(); // this argument
-                builder.coerce(abc.qname(pubns, abc.string('Instance')));
-                builder.getproperty(abc.qname(privatens, abc.string('wasm$table')))
-                builder.coerce(abc.qname(pubns, abc.string('Array')));
+                builder.coerce(instanceName);
+                builder.getproperty(tableName);
+                builder.coerce(arrayName);
                 traverse(info.target);
                 info.operands.forEach(traverse);
                 let pubset = abc.namespaceSet([pubns]);
                 let runtime = abc.multinameL(pubset);
+                let args = info.operands.length;
                 switch (info.type) {
                     case binaryen.none:
-                        builder.callpropvoid(runtime, info.operands.length);
+                        traceMsg(`callpropvoid (runtime) ${args}`);
+                        builder.callpropvoid(runtime, args);
                         break;
                     case binaryen.i32:
-                        builder.callproperty(runtime, info.operands.length);
+                        traceMsg(`callproperty (runtime) ${args}`);
+                        builder.callproperty(runtime, args);
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
-                        builder.callproperty(runtime, info.operands.length);
+                        traceMsg(`callproperty (runtime) ${args}`);
+                        builder.callproperty(runtime, args);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     default:
@@ -607,6 +749,7 @@ function convertModule(mod) {
                 // AVM locals are shifted over by one versus WebAssembly,
                 // because the 0 index is used for the 'this' parameter.
                 let i = info.index + 1;
+                traceMsg('getlocal ' + i);
                 builder.getlocal(i);
             },
 
@@ -624,14 +767,18 @@ function convertModule(mod) {
                         right.id == binaryen.ConstId
                     ) {
                         if (right.value === 1) {
+                            traceMsg('inclocal_i ' + i);
                             builder.inclocal_i(i);
                             if (info.isTee) {
+                                traceMsg('getlocal ' + i);
                                 builder.getlocal(i);
                             }
                             return;
                         } else if (right.value === -1) {
+                            traceMsg('declocal_i ' + i);
                             builder.declocal_i(i);
                             if (info.isTee) {
+                                traceMsg('getlocal ' + i);
                                 builder.getlocal(i);
                             }
                             return;
@@ -641,8 +788,10 @@ function convertModule(mod) {
 
                 traverse(info.value);
                 if (info.isTee) {
+                    traceVal('dup');
                     builder.dup();
                 }
+                traceVal('setlocal ' + i);
                 builder.setlocal(i);
             },
 
@@ -654,15 +803,20 @@ function convertModule(mod) {
                 let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
                 addGlobal(name, type, globalInfo);
         
+                traceMsg('getlocal_0');
                 builder.getlocal_0(); // 'this' param
-                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                traceMsg('coerce Instance');
+                builder.coerce(instanceName);
+                traceMsg('getproperty global$' + globalInfo.name);
                 builder.getproperty(name);
                 switch (info.type) {
                     case binaryen.i32:
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                 }
@@ -676,9 +830,12 @@ function convertModule(mod) {
                 let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
                 addGlobal(name, type, globalInfo);
 
+                traceMsg('getlocal_0');
                 builder.getlocal_0();
-                builder.coerce(abc.qname(pubns, abc.string('Instance')));
+                traceMsg('coerce Instance');
+                builder.coerce(instanceName);
                 traverse(info.value);
+                traceVal('setproperty global$' + globalInfo.name);
                 builder.setproperty(name);
             },
 
@@ -688,58 +845,45 @@ function convertModule(mod) {
                 traverse(info.ptr);
                 pushOffset(info.offset);
 
-                if (traceMem && shouldTrace(funcName)) {
-                    builder.dup();
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.swap();
-                    builder.pushnull();
-                    builder.swap();
-                    builder.pushstring(abc.string(' load ptr - x' + info.bytes));
-                    builder.add();
-                    builder.call(1);
-                    builder.pop();
-                }
-
                 switch (info.type) {
                     case binaryen.i32:
                         switch (info.bytes) {
                             case 1:
+                                traceVal('li8', traceMem);
                                 builder.li8();
                                 if (info.isSigned) {
+                                    traceVal('sxi8', traceMem);
                                     builder.sxi8();
                                 }
                                 break;
                             case 2:
+                                traceVal('li16', traceMem);
                                 builder.li16();
                                 if (info.isSigned) {
+                                    traceVal('sxi16', traceMem);
                                     builder.sxi16();
                                 }
                                 break;
                             case 4:
+                                traceVal('li32', traceMem);
                                 builder.li32();
                                 break;
                         }
                         break;
                     case binaryen.f32:
+                        traceVal('lf32', traceMem);
                         builder.lf32();
                         break;
                     case binaryen.f64:
+                        traceVal('lf64', traceMem);
                         builder.lf64();
                         break;
                     default:
                         throw new Error('unexpected load type ' + info.type);
                 }
 
-                if (traceMem && shouldTrace(funcName)) {
-                    builder.dup();
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.swap();
-                    builder.pushnull();
-                    builder.swap();
-                    builder.pushstring(abc.string(' load val - x' + info.bytes));
-                    builder.add();
-                    builder.call(1);
-                    builder.pop();
+                if (!trace) {
+                    traceVal('load val', traceMem);
                 }
             },
 
@@ -749,54 +893,42 @@ function convertModule(mod) {
                 traverse(info.ptr);
                 pushOffset(info.offset);
 
-                if (traceMem && shouldTrace(funcName)) {
-                    builder.dup();
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.swap();
-                    builder.pushnull();
-                    builder.swap();
-                    builder.pushstring(abc.string(' store ptr - x' + info.bytes));
-                    builder.add();
-                    builder.call(1);
-                    builder.pop();
-                }
-
                 traverse(info.value);
-
-                if (traceMem && shouldTrace(funcName)) {
-                    builder.dup();
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
-                    builder.swap();
-                    builder.pushnull();
-                    builder.swap();
-                    builder.pushstring(abc.string(' store val - x' + info.bytes));
-                    builder.add();
-                    builder.call(1);
-                    builder.pop();
-                }
 
                 // Flash's si32/si16/si8/sf32/sf64 instructions take
                 // value then pointer, but Wasm stores take pointer
                 // then value. For now do a stack swap but it might
                 // be better to reorder the items when we can confirm
                 // there's no side effects.
+                traceVal2('swap');
                 builder.swap();
 
                 let value = binaryen.getExpressionInfo(info.value);
                 switch (value.type) {
                     case binaryen.i32:
                         switch (info.bytes) {
-                            case 1: builder.si8(); break;
-                            case 2: builder.si16(); break;
-                            case 4: builder.si32(); break;
+                            case 1:
+                                traceVal2('si8', traceMem);
+                                builder.si8();
+                                break;
+                            case 2:
+                                traceVal2('si16', traceMem);
+                                builder.si16();
+                                break;
+                            case 4:
+                                traceVal2('si32', traceMem);
+                                builder.si32();
+                                break;
                             default:
                                 throw new Error('unexpected store size ' + info.bytes);
                         }
                         break;
                     case binaryen.f32:
+                        traceVal2('sf32');
                         builder.sf32();
                         break;
                     case binaryen.f64:
+                        traceVal2('sf64');
                         builder.sf64();
                         break;
                     default:
@@ -807,14 +939,18 @@ function convertModule(mod) {
             visitConst: (info) => {
                 switch (info.type) {
                     case binaryen.i32:
+                        traceMsg('pushint_value ' + info.value);
                         builder.pushint_value(info.value);
                         break;
                     case binaryen.f32:
                     case binaryen.f64:
                         if (isNaN(info.value)) {
+                            traceMsg('pushnan');
                             builder.pushnan();
                         } else {
-                            builder.pushdouble(abc.double(info.value));
+                            let index = abc.double(info.value);
+                            traceMsg(`pushdouble ${index} (${info.value})`);
+                            builder.pushdouble(index);
                         }
                         break;
                     default:
@@ -828,7 +964,9 @@ function convertModule(mod) {
                     case binaryen.ClzInt32:
                         builder.getlocal_0(); // 'this'
                         traverse(info.value);
+                        traceVal('wasm$clz32');
                         builder.callproperty(abc.qname(privatens, abc.string('wasm$clz32')), 1);
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.CtzInt32:
@@ -840,27 +978,34 @@ function convertModule(mod) {
                     case binaryen.NegFloat32:
                     case binaryen.NegFloat64:
                         traverse(info.value);
+                        traceVal('negate');
                         builder.negate();
                         break;
                     case binaryen.AbsFloat32:
                     case binaryen.AbsFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.value);
+                        traceVal('Math.abs');
                         builder.callproperty(abc.qname(pubns, abc.string('abs')), 1);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.CeilFloat32:
                     case binaryen.CeilFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.value);
+                        traceVal('Math.ceil');
                         builder.callproperty(abc.qname(pubns, abc.string('ceil')), 1);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.FloorFloat32:
                     case binaryen.FloorFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.value);
+                        traceVal('Math.floor');
                         builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.TruncFloat32:
@@ -873,9 +1018,11 @@ function convertModule(mod) {
                         break;
                     case binaryen.SqrtFloat32:
                     case binaryen.SqrtFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.value);
+                        traceVal('Math.sqrt');
                         builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
 
@@ -883,8 +1030,11 @@ function convertModule(mod) {
                     // relational
                     case binaryen.EqZInt32:
                         traverse(info.value);
+                        traceMsg('pushbyte 0');
                         builder.pushbyte(0);
+                        traceVal2('strictequals');
                         builder.strictequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
 
@@ -892,21 +1042,27 @@ function convertModule(mod) {
                     case binaryen.TruncSFloat32ToInt32:
                     case binaryen.TruncSFloat64ToInt32:
                         traverse(info.value);
+                        traceVal('convert_i (trunc s)');
                         builder.convert_i(); // ??? check rounding
                         break;
                     case binaryen.TruncUFloat32ToInt32:
                     case binaryen.TruncUFloat64ToInt32:
                         traverse(info.value);
+                        traceVal('convert_i (trunc u)');
                         builder.convert_u(); // ??? check rounding
                         break;
                     case binaryen.ReinterpretFloat32:
                         builder.getlocal_0(); // 'this'
                         traverse(info.value);
-                        builder.callpropvoid(abc.qname(pubns, abc.string('wasm2js_scratch_store_f32')), 1);
+                        traceVal('wasm2js_scratch_store_f32')
+                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_f32')), 1);
 
                         builder.getlocal_0(); // 'this'
+                        traceMsg('pushbyte 0');
                         builder.pushbyte(0);
-                        builder.callproperty(abc.qname(pubns, abc.string('wasm2js_scratch_load_i32')), 1);
+                        traceVal('wasm2js_scratch_load_i32')
+                        builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_i32')), 1);
+                        traceVal('convert_i');
                         builder.convert_i();
 
                         break;
@@ -916,27 +1072,35 @@ function convertModule(mod) {
                     case binaryen.ConvertSInt32ToFloat32:
                     case binaryen.ConvertSInt32ToFloat64:
                         traverse(info.value);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.ConvertUInt32ToFloat32:
                     case binaryen.ConvertUInt32ToFloat64:
                         traverse(info.value);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.PromoteFloat32:
                     case binaryen.DemoteFloat64:
                         // nop for now
                         traverse(info.value);
+                        traceVal('nop (promote/demote float)');
                         break;
                     case binaryen.ReinterpretInt32:
                         builder.getlocal_0(); // 'this'
+                        traceMsg('pushbyte 0');
                         builder.pushbyte(0);
                         traverse(info.value);
+                        traceVal2('wasm2js_scratch_store_i32');
                         builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 2);
 
                         builder.getlocal_0(); // 'this'
+                        traceMsg('wasm2js_scratch_load_f32');
                         builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
+                        traceVal('convert_d');
                         builder.convert_d();
 
                         break;
@@ -957,11 +1121,14 @@ function convertModule(mod) {
                         traverse(info.left);
                         right = binaryen.getExpressionInfo(info.right);
                         if (right.id == binaryen.ConstId && right.value == 1) {
+                            traceVal('increment_i');
                             builder.increment_i();
                         } else if (right.id == binaryen.ConstId && right.value == -1) {
+                            traceVal('decrement_i');
                             builder.decrement_i();
                         } else {
                             traverse(info.right);
+                            traceVal2('add_i');
                             builder.add_i();
                         }
                         break;
@@ -969,17 +1136,21 @@ function convertModule(mod) {
                         traverse(info.left);
                         right = binaryen.getExpressionInfo(info.right);
                         if (right.id == binaryen.ConstId && right.value == 1) {
+                            traceVal('decrement_i');
                             builder.decrement_i();
                         } else if (right.id == binaryen.ConstId && right.value == -1) {
+                            traceVal('decrement_i');
                             builder.increment_i();
                         } else {
                             traverse(info.right);
+                            traceVal2('subtract_i');
                             builder.subtract_i();
                         }
                         break;
                     case binaryen.MulInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('multiply_i');
                         builder.multiply_i();
                         break;
 
@@ -988,72 +1159,79 @@ function convertModule(mod) {
                         traverse(info.left);
                         traverse(info.right);
                         builder.divide();
+                        traceVal2('divide');
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.DivUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('divide');
                         builder.divide();
+                        traceVal('convert_u');
                         builder.convert_u();
                         break;
                     case binaryen.RemSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('modulo');
                         builder.modulo();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.RemUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('modulo');
                         builder.modulo();
+                        traceVal('convert_u');
                         builder.convert_u();
                         break;
 
                     case binaryen.AndInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('bitand');
                         builder.bitand();
                         break;
                     case binaryen.OrInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('bitor');
                         builder.bitor();
                         break;
                     case binaryen.XorInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('bitxor');
                         builder.bitxor();
                         break;
                     case binaryen.ShlInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('lshift');
                         builder.lshift();
                         break;
                     case binaryen.ShrUInt32:
                         traverse(info.left);
-                        builder.convert_u();
                         traverse(info.right);
+                        traceVal2('urshfit');
                         builder.urshift();
+                        traceVal('convert_i');
                         builder.convert_i();
-                        if (traceMem && shouldTrace(funcName)) {
-                            builder.dup();
-                            builder.getlex(abc.qname(pubns, abc.string('trace')));
-                            builder.swap();
-                            builder.pushnull();
-                            builder.swap();
-                            builder.pushstring(abc.string(' urshift result'));
-                            builder.add();
-                            builder.call(1);
-                            builder.pop();
-                        }
                         break;
                     case binaryen.ShrSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('rshift');
                         builder.rshift();
                         break;
                     case binaryen.RotLInt32:
@@ -1068,71 +1246,100 @@ function convertModule(mod) {
                     case binaryen.EqInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('strictequals');
                         builder.strictequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.NeInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('strictequals');
                         builder.strictequals();
+                        traceVal('not');
                         builder.not();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     // int
                     case binaryen.LtSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('lessthan');
                         builder.lessthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.LtUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('lessthan');
                         builder.lessthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.LeSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('lessequals');
                         builder.lessequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.LeUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('lessequals');
                         builder.lessequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GtSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('greaterthan');
                         builder.greaterthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GtUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('greaterthan');
                         builder.greaterthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GeSInt32:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('greaterequals');
                         builder.greaterequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GeUInt32:
                         traverse(info.left);
+                        traceVal('convert_u');
                         builder.convert_u();
                         traverse(info.right);
+                        traceVal('convert_u');
                         builder.convert_u();
+                        traceVal2('greaterequals');
                         builder.greaterequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
 
@@ -1141,18 +1348,21 @@ function convertModule(mod) {
                     case binaryen.AddFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('add');
                         builder.add();
                         break;
                     case binaryen.SubFloat32:
                     case binaryen.SubFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('subtract');
                         builder.subtract();
                         break;
                     case binaryen.MulFloat32:
                     case binaryen.MulFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('multiply');
                         builder.multiply();
                         break;
 
@@ -1161,28 +1371,31 @@ function convertModule(mod) {
                     case binaryen.DivFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('divide');
                         builder.divide();
                         break;
                     case binaryen.CopySignFloat32:
                     case binaryen.CopySignFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
                         throw new Error('copy sign should be removed already');
                         break;
                     case binaryen.MinFloat32:
                     case binaryen.MinFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('Math.min');
                         builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
                     case binaryen.MaxFloat32:
                     case binaryen.MaxFloat64:
-                        builder.getlex(abc.qname(pubns, abc.string('Math')));
+                        builder.getlex(mathName);
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('Math.max');
                         builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
+                        traceVal('convert_d');
                         builder.convert_d();
                         break;
 
@@ -1192,43 +1405,56 @@ function convertModule(mod) {
                     case binaryen.EqFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('strictequals');
                         builder.strictequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.NeFloat32:
                     case binaryen.NeFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('strictequals');
                         builder.strictequals();
+                        traceVal('not');
                         builder.not();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.LtFloat32:
                     case binaryen.LtFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('lessthan');
                         builder.lessthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.LeFloat32:
                     case binaryen.LeFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('lessequals');
                         builder.lessequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GtFloat32:
                     case binaryen.GtFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('greaterthan');
                         builder.greaterthan();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.GeFloat32:
                     case binaryen.GeFloat64:
                         traverse(info.left);
                         traverse(info.right);
+                        traceVal2('greaterequals');
                         builder.greaterequals();
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     
@@ -1242,40 +1468,29 @@ function convertModule(mod) {
                 traverse(info.ifFalse);
                 traverse(info.condition);
                 let label = new Label();
+                traceVal('iftrue ifend');
                 builder.iftrue(label);
+                traceVal2('swap');
                 builder.swap();
+                traceMsg('label ifend');
                 builder.label(label);
+                traceVal('pop');
                 builder.pop();
             },
 
             visitDrop: (info) => {
                 traverse(info.value);
+                traceVal('pop');
                 builder.pop();
             },
 
             visitReturn: (info) => {
                 if (info.value) {
                     traverse(info.value);
-                    if (traceFuncs && shouldTrace(funcName)) {
-                        builder.dup();
-                        builder.getlex(abc.qname(pubns, abc.string('trace')));
-                        builder.swap();
-                        builder.pushnull();
-                        builder.swap();
-                        builder.pushstring(abc.string(' returned from ' + funcName));
-                        builder.add();
-                        builder.call(1);
-                        builder.pop();
-                    }
+                    traceVal('returnvalue from ' + funcName, traceFuncs);
                     builder.returnvalue();
                 } else {
-                    if (traceFuncs && shouldTrace(funcName)) {
-                        builder.getlex(abc.qname(pubns, abc.string('trace')));
-                        builder.pushnull();
-                        builder.pushstring(abc.string('void returned from ' + funcName));
-                        builder.call(1);
-                        builder.pop();
-                    }
+                    traceMsg('returnvoid from ' + funcName, traceFuncs);
                     builder.returnvoid();
                 }
             },
@@ -1283,14 +1498,20 @@ function convertModule(mod) {
             visitHost: (info) => {
                 switch (info.op) {
                     case binaryen.MemoryGrow:
+                        traceMsg('getlocal_0');
                         builder.getlocal_0(); // 'this'
                         traverse(info.operands[0]);
-                        builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_grow')), 1);
+                        traceVal('callproperty wasm$memory_grow');
+                        builder.callproperty(memoryGrowName, 1);
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     case binaryen.MemorySize:
+                        traceMsg('getlocal_0');
                         builder.getlocal_0(); // 'this'
-                        builder.callproperty(abc.qname(privatens, abc.string('wasm$memory_size')), 0);
+                        traceMsg('callproperty wasm$memory_size');
+                        builder.callproperty(memorySizeName, 0);
+                        traceVal('convert_i');
                         builder.convert_i();
                         break;
                     default:
@@ -1299,10 +1520,12 @@ function convertModule(mod) {
             },
 
             visitNop: (info) => {
+                traceMsg('nop');
                 builder.nop();
             },
 
             visitUnreachable: (info) => {
+                traceMsg('unreachable');
                 builder.getlex(abc.qname(pubns, abc.string('Error')));
                 builder.pushstring(abc.string('unreachable'));
                 builder.construct(1);
@@ -1316,6 +1539,8 @@ function convertModule(mod) {
         var resultType = avmType(info.results);
         let varTypes = info.vars.map(avmType);
         let localTypes = argTypes.concat(varTypes);
+        var localCount = localTypes.length + 1;
+        var traceLocals = 0;
 
         let lineno = 1;
         if (debug && shouldTrace(funcName)) {
@@ -1326,7 +1551,7 @@ function convertModule(mod) {
                 builder.debugline(lineno);
             }
             if (trace && shouldTrace(funcName)) {
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.getlex(traceName);
                 builder.pushnull();
                 builder.pushstring(abc.string('func$' + info.name + ' line ' + lineno));
                 builder.call(1);
@@ -1336,6 +1561,7 @@ function convertModule(mod) {
             walkExpression(expr, callbacks);
         }
 
+        /*
         console.log('\n\nfunc ' + info.name);
         console.log('  (' + argTypes.join(', ') + ')');
         console.log('  -> ' + resultType);
@@ -1343,12 +1569,13 @@ function convertModule(mod) {
             console.log('  var ' + varTypes.join(', '));
         }
         console.log('{');
+        */
 
         if (info.module === '') {
             // Regular function
 
             if (traceFuncs && shouldTrace(funcName)) {
-                builder.getlex(abc.qname(pubns, abc.string('trace')));
+                builder.getlex(traceName);
                 builder.pushnull();
                 builder.pushstring(abc.string(info.name + ': '));
                 for (let n = 0; n < argTypes.length; n++) {
@@ -1356,7 +1583,7 @@ function convertModule(mod) {
                 }
                 builder.newarray(argTypes.length);
                 builder.pushstring(abc.string(', '));
-                builder.callproperty(abc.qname(builtinns, abc.string('join')), 1);
+                builder.callproperty(joinName, 1);
                 builder.add();
                 builder.call(1);
                 builder.pop();
@@ -1388,7 +1615,7 @@ function convertModule(mod) {
             if (info.results == binaryen.none) {
                 // why dont we have one?
                 if (traceFuncs && shouldTrace(funcName)) {
-                    builder.getlex(abc.qname(pubns, abc.string('trace')));
+                    builder.getlex(traceName);
                     builder.pushnull();
                     builder.pushstring(abc.string('void returned from ' + funcName));
                     builder.call(1);
@@ -1401,7 +1628,7 @@ function convertModule(mod) {
             }
         } else {
             // Import function.
-            console.log('import from: ' + info.module + '.' + info.base);
+            //console.log('import from: ' + info.module + '.' + info.base);
             let name = abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base));
             instanceTraits.push(abc.trait({
                 name: name,
@@ -1433,7 +1660,7 @@ function convertModule(mod) {
 
         abc.methodBody({
             method,
-            local_count: localTypes.length + 1,
+            local_count: localCount + traceLocals,
             init_scope_depth: 3,
             max_scope_depth: 3,
             max_stack: builder.max_stack,
@@ -1447,7 +1674,7 @@ function convertModule(mod) {
             method
         }));
 
-        console.log('}');
+        //console.log('}');
 
         // @fixme we must also add it to the class
 
@@ -1498,11 +1725,10 @@ function convertModule(mod) {
     // Internal functions o' doom
     {
         // wasm$clz32 helper
-        let intType = abc.qname(pubns, abc.string('int'));
         let method = abc.method({
             name: abc.string('clz32'),
-            return_type: intType,
-            param_types: [intType]
+            return_type: intName,
+            param_types: [intName]
         });
 
         let op = abc.methodBuilder();
@@ -1570,18 +1796,17 @@ function convertModule(mod) {
     }
     {
         // wasm$memory_grow helper
-        let intType = abc.qname(pubns, abc.string('int'));
         let method = abc.method({
             name: abc.string('memory_grow'),
-            return_type: intType,
-            param_types: [intType]
+            return_type: intName,
+            param_types: [intName]
         });
 
         let op = abc.methodBuilder();
         // var old:int = this.wasm$memory.length >>> 16;
         op.getlocal_0();
-        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
-        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.getproperty(memoryName);
+        op.getproperty(lengthName);
         op.pushbyte(16);
         op.urshift();
         op.convert_i();
@@ -1590,26 +1815,16 @@ function convertModule(mod) {
         // @fixme enforce maximums, etc.
         // this.wasm$memory.length = (arg1 + old) << 16;
         op.getlocal_0();
-        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
+        op.getproperty(memoryName);
         op.getlocal_1();
         op.getlocal_2();
         op.add_i();
         op.pushbyte(16);
         op.lshift();
 
-        if (traceMem) {
-            op.dup();
-            op.getlex(abc.qname(pubns, abc.string('trace')));
-            op.swap();
-            op.pushnull();
-            op.swap();
-            op.pushstring(abc.string(' growing memory size'));
-            op.add();
-            op.call(1);
-            op.pop();
-        }
+        //traceVal('growing memory size', traceMem);
 
-        op.setproperty(abc.qname(pubns, abc.string('length')));
+        op.setproperty(lengthName);
 
         // return old;
         op.getlocal_2();
@@ -1624,29 +1839,28 @@ function convertModule(mod) {
         });
 
         instanceTraits.push(abc.trait({
-            name: abc.qname(privatens, abc.string('wasm$memory_grow')),
+            name: memoryGrowName,
             kind: Trait.Method,
             method
         }));
     }
     {
         // wasm$memory_size helper
-        let intType = abc.qname(pubns, abc.string('int'));
         let method = abc.method({
             name: abc.string('memory_size'),
-            return_type: intType,
+            return_type: intName,
             param_types: []
         });
 
         let op = abc.methodBuilder();
         // this.wasm$memory.length >>> 16
         op.getlocal_0();
-        op.getproperty(abc.qname(privatens, abc.string('wasm$memory')));
-        op.getproperty(abc.qname(pubns, abc.string('length')));
+        op.getproperty(memoryName);
+        op.getproperty(lengthName);
 
         if (traceMem) {
             op.dup();
-            op.getlex(abc.qname(pubns, abc.string('trace')));
+            op.getlex(traceName);
             op.swap();
             op.pushnull();
             op.swap();
@@ -1670,7 +1884,7 @@ function convertModule(mod) {
         });
 
         instanceTraits.push(abc.trait({
-            name: abc.qname(privatens, abc.string('wasm$memory_size')),
+            name: memorySizeName,
             kind: Trait.Method,
             method
         }));
@@ -1679,13 +1893,10 @@ function convertModule(mod) {
         // wasm$memory_init helper
         abc.qname(privatens, 'wasm$memory_init')
 
-        let voidType = abc.qname(pubns, abc.string('void'));
-        let intType = abc.qname(pubns, abc.string('int'));
-        let stringType = abc.qname(pubns, abc.string('String'));
         let method = abc.method({
             name: abc.string('memory_init'),
-            return_type: voidType,
-            param_types: [intType, stringType]
+            return_type: voidName,
+            param_types: [intName, stringName]
         });
 
         let op = abc.methodBuilder();
@@ -1750,7 +1961,7 @@ function convertModule(mod) {
     // Class static initializer
     let cinit = abc.method({
         name: abc.string('wasm2swf_cinit'),
-        return_type: abc.qname(pubns, abc.string('void')),
+        return_type: voidName,
         param_types: [],
     });
     let cinitBody = abc.methodBuilder();
@@ -1767,8 +1978,8 @@ function convertModule(mod) {
     // Instance constructor
     let iinit = abc.method({
         name: abc.string('wasm2swf_iinit'),
-        return_type: abc.qname(pubns, abc.string('void')),
-        param_types: [abc.qname(pubns, abc.string('Object'))],
+        return_type: voidName,
+        param_types: [objectName],
     });
 
     let iinitBody = abc.methodBuilder();
@@ -1825,7 +2036,7 @@ function convertModule(mod) {
         op.coerce(appDomainName);
 
         op.getlocal_0();
-        op.coerce(abc.qname(pubns, abc.string('Instance')));
+        op.coerce(instanceName);
         op.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
 
         op.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
@@ -1836,16 +2047,15 @@ function convertModule(mod) {
         let segment = mod.getMemorySegmentInfoByIndex(i);
 
         iinitBody.getlocal_0();
-        iinitBody.coerce(abc.qname(pubns, abc.string('Instance')));
+        iinitBody.coerce(instanceName);
         iinitBody.pushint_value(segment.byteOffset);
         iinitBody.pushstring(abc.string(binaryString(segment.data)));
         iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
     }
 
     // Initialize the table
-    let tableName = abc.qname(privatens, abc.string('wasm$table'));
     iinitBody.getlocal_0();
-    iinitBody.coerce(abc.qname(pubns, abc.string('Instance')));
+    iinitBody.coerce(instanceName);
     iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
     iinitBody.construct(0);
     // @fixme implement the initializer segments
@@ -1886,7 +2096,7 @@ function convertModule(mod) {
     for (let i = 0; i < mod.getNumExports(); i++) {
         let ex = mod.getExportByIndex(i);
         let info = binaryen.getExportInfo(ex);
-        console.log('export', info);
+        //console.log('export', info);
         nprops++;
         let privname;
         switch (info.kind) {
@@ -1918,7 +2128,7 @@ function convertModule(mod) {
                 privname = abc.string('wasm$table');
                 break;
             default: {
-                console.log(info);
+                console.error(info);
                 throw new Error('unexpected export type');
             }
         }
@@ -1940,11 +2150,10 @@ function convertModule(mod) {
     });
 
     // @fixme maybe add class and instance data in the same call?
-    let nameObject = abc.qname(pubns, abc.string('Object'));
-    let className = abc.qname(pubns, abc.string('Instance'));
+    let className = instanceName;
     abc.instance({
         name: className, // @todo make the namespace specifiable
-        super_name: nameObject,
+        super_name: objectName,
         flags: 0,
         iinit,
         traits: instanceTraits,
@@ -1953,7 +2162,7 @@ function convertModule(mod) {
     // Script initializer
     const init = abc.method({
         name: abc.string('wasm2swf_init'),
-        return_type: abc.qname(pubns, abc.string('void')),
+        return_type: voidName,
         param_types: [],
     });
     let initBody = abc.methodBuilder();
@@ -1962,9 +2171,9 @@ function convertModule(mod) {
     initBody.getlocal_0(); // 'this' for pushscope
     initBody.pushscope();
     initBody.findpropstrict(className); // find where to store the class property soon...
-    initBody.getlex(nameObject); // get base class scope
+    initBody.getlex(objectName); // get base class scope
     initBody.pushscope();
-    initBody.getlex(nameObject); // get base class
+    initBody.getlex(objectName); // get base class
     initBody.newclass(classi);
     initBody.popscope();
     initBody.initproperty(className);
@@ -1988,7 +2197,7 @@ function convertModule(mod) {
 
         let cinit = abc.method({
             name: abc.string('Wrapper_cinit'),
-            return_type: abc.qname(pubns, abc.string('void')),
+            return_type: voidName,
             param_types: []
         });
         let cinitBody = abc.methodBuilder();
@@ -2004,7 +2213,7 @@ function convertModule(mod) {
 
         let iinit = abc.method({
             name: abc.string('Wrapper_iinit'),
-            return_type: abc.qname(pubns, abc.string('void')),
+            return_type: voidName,
             param_types: []
         });
         let iinitBody = abc.methodBuilder();
@@ -2029,7 +2238,7 @@ function convertModule(mod) {
         initBody.getlocal_0(); // 'this' for pushscope
         initBody.pushscope();
         initBody.findpropstrict(className); // find where to store the class property soon...
-        initBody.getlex(nameObject);
+        initBody.getlex(objectName);
         initBody.pushscope();
         initBody.getlex(abc.qname(flasheventsns, abc.string('EventDispatcher')));
         initBody.pushscope();
