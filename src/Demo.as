@@ -102,11 +102,9 @@ package {
                                     memory.writeInt(setjmpId);
                                     memory.writeInt(label);
                                     memory.writeInt(0);
-                                    memory.position = 0;
                                     setTempRet0(size);
                                     return table;
                                 }
-                                memory.position = 0;
                                 i++;
                             }
                             size *= 2;
@@ -120,7 +118,6 @@ package {
                             while (i < size) {
                                 memory.position = table + (i << 3);
                                 curr = memory.readInt();
-                                memory.position = 0;
                                 if (curr == 0) break;
                                 if (curr == id) {
                                     return memory.readInt();
