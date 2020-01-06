@@ -1821,6 +1821,10 @@ function convertModule(mod) {
 
         op.setproperty(lengthName);
 
+        // Reattach domain memory after growth
+        // This may or may not be necessary
+        attachDomainMemory(op);
+
         // return old;
         op.getlocal_2();
         op.returnvalue();
