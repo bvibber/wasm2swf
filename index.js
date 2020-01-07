@@ -288,7 +288,6 @@ function convertModule(mod) {
 
     function convertFunction(func) {
         const builder = abc.methodBuilder();
-        let labelIndex = 0;
         let labelStack = [];
 
         function labelByName(name) {
@@ -311,7 +310,7 @@ function convertModule(mod) {
 
         const callbacks = {
             visitBlock: (info) => {
-                let name = info.name || 'block' + labelIndex++;
+                let name = info.name;
                 let label = new Label(name);
                 labelStack.push(label);
                 info.children.forEach(traverse);
