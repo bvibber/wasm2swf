@@ -1195,6 +1195,7 @@ function convertModule(mod) {
             visitSelect: (info) => {
                 traverse(info.ifTrue);
                 traverse(info.ifFalse);
+                // @todo optimize condition checks
                 traverse(info.condition);
                 let label = new Label();
                 builder.iftrue(label);
