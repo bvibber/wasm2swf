@@ -850,6 +850,7 @@ function convertModule(mod) {
                     case binaryen.TruncUFloat64ToInt32:
                         traverse(info.value);
                         builder.convert_u(); // ??? check rounding
+                        builder.convert_i();
                         break;
                     case binaryen.ReinterpretFloat32:
                         builder.getlocal_0(); // 'this'
