@@ -1164,6 +1164,11 @@ class MethodBuilder extends ABCBuilder {
         this.u30(arg_count);
     }
 
+    convert_b() {
+        this.trace('convert_b', [], 1, 1);
+        this.u8(0x76);
+    }
+
     convert_i() {
         this.trace('convert_i', [], 1, 1);
         this.u8(0x73);
@@ -1174,9 +1179,19 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x75);
     }
 
+    convert_o() {
+        this.trace('convert_o', [], 1, 1);
+        this.u8(0x77);
+    }
+
     convert_u() {
         this.trace('convert_u', [], 1, 1);
         this.u8(0x74);
+    }
+
+    convert_s() {
+        this.trace('convert_s', [], 1, 1);
+        this.u8(0x70);
     }
 
     debugfile(index) {
