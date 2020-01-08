@@ -584,14 +584,42 @@ function convertModule(mod) {
             },
 
             visitCallIndirect: (info) => {
+                // The target for callproperty comes after parameters in Wasm,
+                // but before in AVM2. We could check for side effects and reorder
+                // but for now let's just save some extras.
+
+                // WARNING: THIS WILL BREAK WITH --trace for now
+                if (trace) {
+                    throw new Error('temp incompatibility with --trace for callIndirect');
+                }
+
+                // Store in temporary locals
+                let paramLocals = [];
+                let args = info.operands.length;
+                for (let i = 0; i < args; i++) {
+                    let index = freeLocal++;
+                    paramLocals[i] = index;
+                    traverse(info.operands[i]);
+                    builder.setlocal(index);
+                }
+
+                // Grab the table and the target
                 builder.getlocal_0(); // this argument
                 builder.getproperty(tableName);
                 builder.coerce(arrayName);
                 traverse(info.target);
-                info.operands.forEach(traverse);
+
+                // Now get those args back
+                for (let i = 0; i < args; i++) {
+                    builder.getlocal(paramLocals[i]);
+                    builder.kill(paramLocals[i]);
+                }
+
+                // And release them for later reuse.
+                freeLocal -= args;
+
                 let pubset = abc.namespaceSet([pubns]);
                 let runtime = abc.multinameL(pubset);
-                let args = info.operands.length;
                 switch (info.type) {
                     case binaryen.none:
                         builder.callpropvoid(runtime, args);
@@ -1230,6 +1258,7 @@ function convertModule(mod) {
         let varTypes = info.vars.map(avmType);
         let localTypes = argTypes.concat(varTypes);
         var localCount = localTypes.length + 1;
+        var freeLocal = localCount;
 
         let lineno = 1;
         if (debug && shouldTrace(funcName)) {

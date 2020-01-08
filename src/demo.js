@@ -22,6 +22,10 @@ var videoSources = {
     'ogg-theora': 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.ogv',
     'webm-vp8': 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.webm',
     'webm-vp9': 'https://media-streaming.wmflabs.org/clean/transcoded/4/43/Eisbach_surfen_v1.ogv/Eisbach_surfen_v1.ogv.240p.vp9.webm',
+
+    // this one plays for a while then dies. interesting.
+    //'webm-vp9': 'https://media-streaming.wmflabs.org/clean/transcoded/7/7c/Caminandes_-_Gran_Dillama_-_Blender_Foundation%27s_new_Open_Movie.webm/Caminandes_-_Gran_Dillama_-_Blender_Foundation%27s_new_Open_Movie.webm.240p.vp9.webm',
+
     'webm-av1': 'https://media-streaming.wmflabs.org/clean/av1-2/spring-morning.webm.213x120.av1.webm',
 };
 
@@ -267,6 +271,7 @@ document.getElementById('decode_video').addEventListener('click', function() {
                 var ok;
 
                 var start = performance.now();
+                drawDelta = 0;
                 if (!videoLoaded) {
                     ok = codecSwf.run('ogv_video_decoder_process_header', [ptr, bytes.length]);
                     if (ok !== 1) {
@@ -281,7 +286,6 @@ document.getElementById('decode_video').addEventListener('click', function() {
                 var delta = performance.now() - start - drawDelta;
                 log(delta + ' ms to decode');
                 console.log(delta + ' ms to decode; ' + drawDelta + ' to extract/draw');
-                drawDelta = 0;
 
                 if (typeof ok === 'string') {
                     return 0;
