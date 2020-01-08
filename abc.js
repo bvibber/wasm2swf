@@ -392,7 +392,7 @@ class ABCBuilder extends Builder {
                 byte |= 128;
             }
             this.out(byte);
-            val >>= 7;
+            val >>>= 7;
         } while (bits > 0);
     }
 
