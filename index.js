@@ -1031,20 +1031,25 @@ function convertModule(mod) {
                     // relational ops
                     // int or float
                     case binaryen.EqInt32:
+                    case binaryen.EqFloat32:
+                    case binaryen.EqFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.strictequals();
                         builder.convert_i();
                         break;
                     case binaryen.NeInt32:
+                    case binaryen.NeFloat32:
+                    case binaryen.NeFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.strictequals();
                         builder.not();
                         builder.convert_i();
                         break;
-                    // int
                     case binaryen.LtSInt32:
+                    case binaryen.LtFloat32:
+                    case binaryen.LtFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.lessthan();
@@ -1059,6 +1064,8 @@ function convertModule(mod) {
                         builder.convert_i();
                         break;
                     case binaryen.LeSInt32:
+                    case binaryen.LeFloat32:
+                    case binaryen.LeFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.lessequals();
@@ -1073,6 +1080,8 @@ function convertModule(mod) {
                         builder.convert_i();
                         break;
                     case binaryen.GtSInt32:
+                    case binaryen.GtFloat32:
+                    case binaryen.GtFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.greaterthan();
@@ -1087,6 +1096,8 @@ function convertModule(mod) {
                         builder.convert_i();
                         break;
                     case binaryen.GeSInt32:
+                    case binaryen.GeFloat32:
+                    case binaryen.GeFloat64:
                         traverse(info.left);
                         traverse(info.right);
                         builder.greaterequals();
@@ -1147,52 +1158,6 @@ function convertModule(mod) {
                         traverse(info.right);
                         builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
                         builder.convert_d();
-                        break;
-
-                    // relational ops
-                    // int or float
-                    case binaryen.EqFloat32:
-                    case binaryen.EqFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.strictequals();
-                        builder.convert_i();
-                        break;
-                    case binaryen.NeFloat32:
-                    case binaryen.NeFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.strictequals();
-                        builder.not();
-                        builder.convert_i();
-                        break;
-                    case binaryen.LtFloat32:
-                    case binaryen.LtFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.lessthan();
-                        builder.convert_i();
-                        break;
-                    case binaryen.LeFloat32:
-                    case binaryen.LeFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.lessequals();
-                        builder.convert_i();
-                        break;
-                    case binaryen.GtFloat32:
-                    case binaryen.GtFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.greaterthan();
-                        builder.convert_i();
-                        break;
-                    case binaryen.GeFloat32:
-                    case binaryen.GeFloat64:
-                        traverse(info.left);
-                        traverse(info.right);
-                        builder.greaterequals();
-                        builder.convert_i();
                         break;
                     
                     default:
