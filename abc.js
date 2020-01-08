@@ -1010,21 +1010,22 @@ class MethodBuilder extends ABCBuilder {
         return new Label(name);
     }
 
-    fixup(label) {
+    fixup(label, anchor=this.offset() + 3) {
         // Add a placeholder for a relative jump to the future
+        let offset = this.offset();
         this.s24(0);
         let fixup = {
-            offset: this.offset() - 3, // location of the s24 value
-            anchor: this.offset(),   // position from which the offset will be calculated
+            offset: offset, // location of the s24 value
+            anchor: anchor, // position from which the relative jump will be calculated
             label
         };
         this.fixups.push(fixup);
         return fixup;
     }
 
-    relativeAddress(label) {
+    relativeAddress(label, anchor=undefined) {
         label.used = true;
-        return this.fixup(label);
+        return this.fixup(label, anchor);
     }
 
     applyFixups() {
@@ -1482,17 +1483,21 @@ class MethodBuilder extends ABCBuilder {
             [default_label.name, case_labels.length - 1].concat(case_labels.map((x) => x.name)),
             1
         );
+
+        if (case_labels.length == 0) {
+            throw new Error('Must have at least one case label');
+        }
+
+        // The addresses are relative to the start of the whole instruction,
+        // unlike the other branching instructions which are relative to the
+        // end of the instruction.
         let anchor = this.offset();
+
         this.u8(0x1b);
-        let fixups = [];
-        fixups.push(this.relativeAddress(default_label));
+        this.relativeAddress(default_label, anchor);
         this.u30(case_labels.length - 1);
         for (let label of case_labels) {
-            fixups.push(this.relativeAddress(label));
-        }
-        // Re-anchor all those fixups to the end of the whole instruction.
-        for (let fixup of fixups) {
-            fixup.anchor = anchor;
+            this.relativeAddress(label, anchor);
         }
     }
 
