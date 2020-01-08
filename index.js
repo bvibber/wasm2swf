@@ -286,13 +286,9 @@ function convertModule(mod) {
         let info = binaryen.getExpressionInfo(expr);
         let cb = 'visit' + expressionTypes[info.id];
         if (callbacks[cb]) {
-            let ret = callbacks[cb](info, expr);
-            if (ret === null) {
-                // Do not keep traversing.
-                return;
-            }
+            callbacks[cb](info, expr);
         } else {
-            throw new Error(`Unhandled node of type ${id}`);
+            throw new Error(`Unhandled node of type ${info.id}`);
         }
     }
 
@@ -339,6 +335,8 @@ function convertModule(mod) {
                 builder.add_i();
             } else if (offset === 1) {
                 builder.increment_i();
+            } else if (offset < 0) {
+                throw new Error('invalid negative offset');
             }
         }
 
@@ -542,11 +540,14 @@ function convertModule(mod) {
                 }
 
                 traverse(info.ifTrue);
+
                 if (info.ifFalse) {
                     let elseend = new Label();
                     builder.jump(elseend);
                     builder.label(ifend);
+
                     traverse(info.ifFalse);
+
                     builder.label(elseend);
                 } else {
                     builder.label(ifend);
@@ -964,13 +965,8 @@ function convertModule(mod) {
                         builder.convert_d();
                         break;
                     case binaryen.PromoteFloat32:
-                        builder.getlocal_0();
+                        // nop
                         traverse(info.value);
-                        builder.callpropvoid(scratch_store_f32, 1);
-
-                        builder.getlocal_0();
-                        builder.callproperty(scratch_load_f64, 0);
-                        builder.convert_d();
                         break;
                     case binaryen.DemoteFloat64:
                         builder.getlocal_0();
@@ -979,6 +975,7 @@ function convertModule(mod) {
 
                         builder.getlocal_0();
                         builder.callproperty(scratch_load_f32, 0);
+                        builder.convert_d();
                         break;
                     case binaryen.ReinterpretInt32:
                         builder.getlocal_0();
