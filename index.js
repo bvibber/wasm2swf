@@ -151,6 +151,16 @@ function convertModule(mod) {
     let memoryInitName = qname(privatens, 'wasm$memory_init');
     let clz32Name = qname(privatens, 'wasm$clz32');
 
+    let scratch_load_i32 = qname(privatens, 'func$wasm2js_scratch_load_i32');
+    let scratch_load_i64 = qname(privatens, 'func$wasm2js_scratch_load_i64');
+    let scratch_load_f32 = qname(privatens, 'func$wasm2js_scratch_load_f32');
+    let scratch_load_f64 = qname(privatens, 'func$wasm2js_scratch_load_f32');
+
+    let scratch_store_i32 = qname(privatens, 'func$wasm2js_scratch_store_i32');
+    let scratch_store_i64 = qname(privatens, 'func$wasm2js_scratch_store_i64');
+    let scratch_store_f32 = qname(privatens, 'func$wasm2js_scratch_store_f32');
+    let scratch_store_f64 = qname(privatens, 'func$wasm2js_scratch_store_f32');
+
     let builtinns = ns(Namespace.PackageNamespace, 'http://adobe.com/AS3/2006/builtin');
     let joinName = qname(builtinns, 'join');
 
@@ -853,13 +863,13 @@ function convertModule(mod) {
                         builder.convert_i();
                         break;
                     case binaryen.ReinterpretFloat32:
-                        builder.getlocal_0(); // 'this'
+                        builder.getlocal_0();
                         traverse(info.value);
-                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_f32')), 1);
+                        builder.callpropvoid(scratch_store_f32, 1);
 
-                        builder.getlocal_0(); // 'this'
+                        builder.getlocal_0();
                         builder.pushbyte(0);
-                        builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_i32')), 1);
+                        builder.callproperty(scratch_load_i32, 1);
                         builder.convert_i();
 
                         break;
@@ -878,18 +888,30 @@ function convertModule(mod) {
                         builder.convert_d();
                         break;
                     case binaryen.PromoteFloat32:
-                    case binaryen.DemoteFloat64:
-                        // nop for now
+                        builder.getlocal_0();
                         traverse(info.value);
-                        builder.nop();
+                        builder.callpropvoid(scratch_store_f32, 1);
+
+                        builder.getlocal_0();
+                        builder.callproperty(scratch_load_f64, 0);
+                        builder.convert_d();
+                        break;
+                    case binaryen.DemoteFloat64:
+                        builder.getlocal_0();
+                        traverse(info.value);
+                        builder.callpropvoid(scratch_store_f64, 1);
+
+                        builder.getlocal_0();
+                        builder.callproperty(scratch_load_f32, 0);
                         break;
                     case binaryen.ReinterpretInt32:
-                        builder.getlocal_0(); // 'this'
+                        builder.getlocal_0();
+                        builder.pushbyte(0);
                         traverse(info.value);
-                        builder.callpropvoid(abc.qname(privatens, abc.string('func$wasm2js_scratch_store_i32')), 1);
+                        builder.callpropvoid(scratch_store_i32, 2);
 
-                        builder.getlocal_0(); // 'this'
-                        builder.callproperty(abc.qname(privatens, abc.string('func$wasm2js_scratch_load_f32')), 0);
+                        builder.getlocal_0();
+                        builder.callproperty(scratch_load_f32, 0);
                         builder.convert_d();
 
                         break;
