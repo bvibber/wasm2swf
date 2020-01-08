@@ -561,37 +561,50 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                 getTempRet0: function getTempRet0() {
                     return tempRet0;
                 },
+                // literally none of these scratch funcs are called
+                // in the hot paths so far
                 wasm2js_scratch_load_i32: function(i) {
+                    throw new Error('yo8');
                     return scratch_i32[i];
                 },
                 wasm2js_scratch_store_i32: function(i, val) {
+                    throw new Error('yo7');
                     scratch_i32[i] = val;
                 },
                 wasm2js_scratch_load_i64: function() {
+                    throw new Error('yo6');
                     tempRet0 = scratch_i32[1];
                     return scratch_i32[0];
                 },
                 wasm2js_scratch_store_i64: function(low, high) {
+                    throw new Error('yo5');
                     scratch_i32[0] = low;
                     scratch_i32[1] = high;
                 },
                 wasm2js_scratch_load_f32: function() {
+                    throw new Error('yo4');
                     return scratch_f32[0];
                 },
                 wasm2js_scratch_store_f32: function(val) {
+                    throw new Error('yo3');
                     scratch_f32[0] = val;
                 },
                 wasm2js_scratch_load_f64: function() {
+                    throw new Error('yo2');
                     return scratch_f64[0];
                 },
                 wasm2js_scratch_store_f64: function(val) {
+                    throw new Error('yo1');
                     scratch_f64[0] = val;
                 },
                 emscripten_longjmp: function(env, val) {
+                    throw new Error('not used in hotpath');
                     exports.setThrew(env, val || 1);
                     throw 'longjmp';
                 },
                 saveSetjmp: function saveSetjmp(env, label, table, size) {
+                    // not needed in hotpath, makes no difffff
+                    return table;
                     var i = 0;
                     setjmpId++;
                     HEAP32[env >> 2] = setjmpId;
@@ -615,6 +628,7 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                     return table;
                 },
                 testSetjmp: function testSetjmp(id, table, size) {
+                    throw new Error('explode!');
                     var i = 0;
                     while (i < size) {
                         var curr = HEAP32[table + (i << 3) >> 2];
@@ -649,7 +663,7 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                 invoke_viiiiii: function(func, arg1, arg2, arg3, arg4, arg5, arg6) {
                     var sp = exports.stackSave();
                     try {
-                        exports.dynCall_viiii(func, arg1, arg2, arg3, arg4, arg5, arg6);
+                        exports.dynCall_viiiiii(func, arg1, arg2, arg3, arg4, arg5, arg6);
                     } catch (e) {
                         exports.stackRestore(sp);
                         if (e !== "longjmp") throw e;
