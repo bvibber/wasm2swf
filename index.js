@@ -1,5 +1,5 @@
 const fs = require('fs');
-const binaryen = require('binaryen');
+const binaryen = require('./binaryen-patched');
 const {
     ABCFileBuilder,
     Label,
@@ -544,22 +544,7 @@ function convertModule(mod) {
                 }
                 traverse(info.condition);
                 let default_label = labelByName(info.defaultName);
-
-                // currently broken upstream
-                let names = info.names;
-                // so we'll rebuild them. stronger. faster. better.
-                let n = binaryen._BinaryenSwitchGetNumNames(expr);
-                for (let i = 0; i < n; i++) {
-                    let p = binaryen._BinaryenSwitchGetName(expr, i);
-                    let h = binaryen.HEAPU8;
-                    let s = '';
-                    for (let i = p; h[i] != 0; i++) {
-                        s += String.fromCharCode(h[i]);
-                    }
-                    names[i] = s;
-                }
-
-                let case_labels = names.map(labelByName);
+                let case_labels = info.names.map(labelByName);
                 builder.lookupswitch(default_label, case_labels);
             },
 
@@ -1776,10 +1761,11 @@ function convertModule(mod) {
     iinitBody.getlocal_0();
     iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
     iinitBody.construct(0);
-    // @fixme implement the initializer segments
-    // needs accessors added to binaryen.js
     iinitBody.initproperty(tableName);
 
+    // @fixme implement the initializer segments
+    // @fixme needs proper accessors added to upstream binaryen.js
+    // this is a custom-patched version
     for (let i = 0; i < mod.getNumFunctionTableSegments(); i++) {
         let segment = mod.getFunctionTableSegmentInfoByIndex(i);
         for (let j = 0; j < segment.functions.length; j++) {
