@@ -330,3 +330,394 @@ document.getElementById('decode_video').addEventListener('click', function() {
     var swf = flashObject('demo.swf', 'readyCallback', demuxers[videoSource.value]);
     document.body.appendChild(swf);
 });
+
+document.getElementById('decode_video_wasm').addEventListener('click', function() {
+    var videoPackets = [];
+    var audioPackets = [];
+    var videoCodec = null;
+    var audioCodec = null;
+
+    var callbacks = {
+        ready: function() {
+            log('demuxer ready!');
+            setTimeout(startDemuxing(), 0);
+        },
+        error: function(msg) {
+            log('Flash reported error loading module.swf: ' + msg);
+        },
+        ogvjs_callback_loaded_metadata: function(aVideoCodec, anAudioCodec) {
+            videoCodec = swf.readString(aVideoCodec);
+            audioCodec = swf.readString(anAudioCodec);
+            log('video codec: ' + videoCodec);
+            log('audio codec: ' + audioCodec);
+        },
+        ogvjs_callback_video_packet: function(ptr, len, frameTimestamp, keyframeTimestamp, isKeyframe) {
+            var data = swf.readBinary(ptr, len);
+            //log('video packet: ' + data.length + ' bytes at timestamp ' + frameTimestamp + (isKeyframe ? ', keyframe' : ''));
+            videoPackets.push({
+                data: data,
+                frameTimestamp: frameTimestamp,
+                keyframeTimestamp: keyframeTimestamp,
+                isKeyframe: isKeyframe
+            });
+        },
+        ogvjs_callback_audio_packet: function(ptr, len, audioTimestamp, discardPadding) {
+            var data = swf.readBinary(ptr, len);
+            //log('audio packet: ' + data.length + ' bytes at timestamp ' + audioTimestamp);
+            audioPackets.push({
+                data: data,
+                audioTimestamp: audioTimestamp,
+                discardPadding: discardPadding
+            });
+        }
+    };
+
+    function readyCallback(method, args) {
+        callbacks[method].apply(null, args);
+    }
+    window.readyCallback = readyCallback;
+
+    function startDemuxing() {
+        var url = videoSources[videoSource.value];
+        var xhr = new XMLHttpRequest();
+        xhr.addEventListener('load', function() {
+            var buffer = xhr.response;
+            var bytes = new Uint8Array(buffer);
+            log('loaded ' + url + ' -- ' + bytes.length + ' bytes');
+
+            bytes = bytes.subarray(0, 65536 * 2);
+
+            var ptr = swf.run('malloc', [bytes.length]);
+            //log('malloc(' + bytes.length + ') -> ' + ptr);
+
+            //swf.writeBytes(ptr, Array.prototype.slice.apply(bytes));
+            swf.writeBinary(ptr, bytes2string(bytes));
+
+            swf.run('ogv_demuxer_init', []);
+            swf.run('ogv_demuxer_receive_input', [ptr, bytes.length]);
+
+            swf.run('free', [ptr]);
+            //log('free(' + ptr + ')');
+
+            setTimeout(function again() {
+                var start = performance.now();
+                var more = swf.run('ogv_demuxer_process', []);
+                var delta = performance.now() - start;
+                //log(delta + ' ms to demux');
+                //console.log(delta + ' ms to demux');
+
+                //log('ogv_demuxer_process() -> ' + more);
+
+                if (more) {
+                    setTimeout(again, 0);
+                } else {
+                    loadCodec();
+                }
+            }, 0);
+        });
+        xhr.open('GET', url);
+        xhr.responseType = 'arraybuffer';
+        xhr.send();
+    }
+
+    function loadCodec() {
+        var videoLoaded = !(videoSource.value === 'ogg-theora'); // theora has header packets
+        var drawDelta = 0;
+
+        function startPlayback() {
+            var init = exports.ogv_video_decoder_init();
+            log('ogv_video_decoder_init() -> ' + init);
+
+            function decodePacket(packet) {
+                var bytes = string2bytes(packet.data);
+                var ptr = exports.malloc(bytes.length);
+                //log('malloc(' + bytes.length + ') -> ' + ptr);
+                HEAPU8.set(bytes, ptr);
+                var ok;
+
+                var start = performance.now();
+                drawDelta = 0;
+                if (!videoLoaded) {
+                    ok = exports.ogv_video_decoder_process_header(ptr, bytes.length);
+                    if (ok !== 1) {
+                        log('ogv_video_decoder_process_header(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    }
+                } else {
+                    ok = exports.ogv_video_decoder_process_frame(ptr, bytes.length);
+                    if (ok !== 1) {
+                        log('ogv_video_decoder_process_frame(' + ptr + ', ' + bytes.length + ') -> ' + ok);
+                    }
+                }
+                var delta = performance.now() - start - drawDelta;
+                log(delta + ' ms to decode');
+                console.log(delta + ' ms to decode; ' + drawDelta + ' to extract/draw');
+
+                exports.free(ptr);
+                //log('free(' + ptr + ')');
+
+                return ok;
+            }
+
+            setTimeout(function again() {
+                if (videoPackets.length == 0) {
+                    log('no more video packets');
+                    return;
+                }
+                var packet = videoPackets.shift();
+                var ok = decodePacket(packet);
+                if (!ok) {
+                    log('failed to decode packet');
+                    return;
+                }
+
+                if (videoPackets.length > 0) {
+                    setTimeout(again, 0);
+                }
+            }, 0);
+        }
+
+        function codecCallback(method, args) {
+            codecCallbacks[method].apply(null, args);
+        }
+        window.codecCallback = codecCallback;
+
+        log('loading codec...');
+
+        var codecWasm;
+        var tempRet0 = 0;
+        var scratch = new ArrayBuffer(8);
+        var scratch_i32 = new Int32Array(scratch);
+        var scratch_f32 = new Float32Array(scratch);
+        var scratch_f64 = new Float64Array(scratch);
+        var exports, memory;
+        var HEAP32, HEAPU8;
+        var setjmpId = 0;
+        var importObject = {
+            env: {
+                ogvjs_callback_init_video: function(frameWidth, frameHeight,
+                    chromaWidth, chromaHeight,
+                    fps,
+                    picWidth, picHeight,
+                    picX, picY,
+                    displayWidth, displayHeight)
+                {
+                    videoLoaded = true;
+                    log('video initialized: ' + frameWidth + 'x' + frameHeight +
+                    ' (chroma ' + chromaWidth + 'x' + chromaHeight + '), ' + fps + ' fps');
+                    log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
+                    log('display size ' + displayWidth + 'x' + displayHeight);
+                },
+                ogvjs_callback_frame: function(bufferY, strideY,
+                    bufferCb, strideCb,
+                    bufferCr, strideCr,
+                    frameWidth, frameHeight,
+                    chromaWidth, chromaHeight,
+                    picWidth, picHeight,
+                    picX, picY,
+                    displayWidth, displayHeight)
+                {
+                    var start = performance.now();
+                    /*
+                    log('frame callback!')
+                    log('frame size ' + frameWidth + 'x' + frameHeight +
+                    ' (chroma ' + chromaWidth + 'x' + chromaHeight + ')');
+                    log('picture size ' + picWidth + 'x' + picHeight + ' with crop ' + picX + ', ' + picY);
+                    log('display size ' + displayWidth + 'x' + displayHeight);
+
+                    log('Y buffer ' + bufferY + '; stride ' + strideY);
+                    log('Cb buffer ' + bufferCb + '; stride ' + strideCb);
+                    log('Cr buffer ' + bufferCr + '; stride ' + strideCr);
+                    */
+
+                    var format = YUVBuffer.format({
+                        width: frameWidth,
+                        height: frameHeight,
+                        chromaWidth: chromaWidth,
+                        chromaHeight: chromaHeight,
+                        cropLeft: picX,
+                        cropTop: picY,
+                        cropWidth: picWidth,
+                        cropHeight: picHeight,
+                        displayWidth: displayWidth,
+                        displayHeight: displayHeight,
+                    });
+                    var frame = YUVBuffer.frame(format);
+                    frame.y.bytes = HEAPU8.subarray(bufferY, bufferY + strideY * frameHeight);
+                    frame.y.stride = strideY;
+                    frame.u.bytes = HEAPU8.subarray(bufferCb, bufferCb + strideCb * chromaHeight);
+                    frame.u.stride = strideCb;
+                    frame.v.bytes = HEAPU8.subarray(bufferCr, bufferCr + strideCr * chromaHeight);
+                    frame.v.stride = strideCr;
+                    frameSink.drawFrame(frame);
+                    var delta = performance.now() - start;
+                    drawDelta = delta;
+                },
+                ogvjs_callback_async_complete: function() {},
+    
+                emscripten_notify_memory_growth: function(){},
+                setTempRet0: function setTempRet0(val) {
+                    tempRet0 = val;
+                },
+                getTempRet0: function getTempRet0() {
+                    return tempRet0;
+                },
+                wasm2js_scratch_load_i32: function(i) {
+                    return scratch_i32[i];
+                },
+                wasm2js_scratch_store_i32: function(i, val) {
+                    scratch_i32[i] = val;
+                },
+                wasm2js_scratch_load_i64: function() {
+                    tempRet0 = scratch_i32[1];
+                    return scratch_i32[0];
+                },
+                wasm2js_scratch_store_i64: function(low, high) {
+                    scratch_i32[0] = low;
+                    scratch_i32[1] = high;
+                },
+                wasm2js_scratch_load_f32: function() {
+                    return scratch_f32[0];
+                },
+                wasm2js_scratch_store_f32: function(val) {
+                    scratch_f32[0] = val;
+                },
+                wasm2js_scratch_load_f64: function() {
+                    return scratch_f64[0];
+                },
+                wasm2js_scratch_store_f64: function(val) {
+                    scratch_f64[0] = val;
+                },
+                emscripten_longjmp: function(env, val) {
+                    exports.setThrew(env, val || 1);
+                    throw 'longjmp';
+                },
+                saveSetjmp: function saveSetjmp(env, label, table, size) {
+                    var i = 0;
+                    setjmpId++;
+                    HEAP32[env >> 2] = setjmpId;
+                    while (i < size) {
+                        memory.position = table + (i << 3);
+                        if (HEAP32[table + (i << 3) >> 2] == 0) {
+                            HEAP32[table + (i << 3) >> 2] = setjmpId;
+                            HEAP32[table + ((i << 3) + 4) >> 2] = label;
+                            HEAP32[table + ((i << 3) + 8) >> 2] = 0;
+                            //setTempRet0(size);
+                            tempRet0 = size;
+                            return table;
+                        }
+                        i++;
+                    }
+                    size *= 2;
+                    table = exports.realloc(table, 8 * (size + 1));
+                    table = saveSetjmp(env, label, table, size);
+                    //setTempRet0(size);
+                    setTempRet0 = size;
+                    return table;
+                },
+                testSetjmp: function testSetjmp(id, table, size) {
+                    var i = 0;
+                    while (i < size) {
+                        var curr = HEAP32[table + (i << 3) >> 2];
+                        if (curr == 0) break;
+                        if (curr == id) {
+                            return HEAP32[table + ((i << 3) + 4) >> 2];
+                        }
+                        i++;
+                    }
+                    return 0;
+                },
+                invoke_vi: function(func, arg1) {
+                    var sp = exports.stackSave();
+                    try {
+                        exports.dynCall_vi(func, arg1);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                },
+                invoke_viiii: function(func, arg1, arg2, arg3, arg4) {
+                    var sp = exports.stackSave();
+                    try {
+                        exports.dynCall_viiii(func, arg1, arg2, arg3, arg4);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                },
+                invoke_viiiiii: function(func, arg1, arg2, arg3, arg4, arg5, arg6) {
+                    var sp = exports.stackSave();
+                    try {
+                        exports.dynCall_viiii(func, arg1, arg2, arg3, arg4, arg5, arg6);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                },
+                invoke_iii: function(func, arg1, arg2) {
+                    var sp = exports.stackSave();
+                    try {
+                        return exports.dynCall_iii(func, arg1, arg2);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                    return 0; // ??
+                },
+                invoke_iiii: function(func, arg1, arg2, arg3) {
+                    var sp = exports.stackSave();
+                    try {
+                        return exports.dynCall_iiii(func, arg1, arg2, arg3);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                    return 0; // ??
+                },
+                invoke_iiiii: function(func, arg1, arg2, arg3, arg4) {
+                    var sp = exports.stackSave();
+                    try {
+                        return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                    return 0; // ??
+                },
+                invoke_iiiij: function(func, arg1, arg2, arg3, arg4lo, arg4hi) {
+                    var sp = exports.stackSave();
+                    try {
+                        return exports.dynCall_iiiij(func, arg1, arg2, arg3, arg4lo, arg4hi);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                    return 0; // ??
+                }
+            }
+        };
+    
+        WebAssembly.instantiateStreaming(fetch('ogv-decoder-video-vp9.wasm'), importObject)
+        .then(function(obj) {
+            codecWasm = obj.instance;
+            exports = codecWasm.exports;
+            memory = exports.memory.buffer;
+            HEAP32 = new Int32Array(memory);
+            HEAPU8 = new Uint8Array(memory);
+            console.log('codecWasm', codecWasm);
+            window.codecWasm = codecWasm; // for testing
+
+            setTimeout(startPlayback, 0);
+        });
+    }
+
+    log('loading demuxer...');
+    var swf = flashObject('demo.swf', 'readyCallback', demuxers[videoSource.value]);
+    document.body.appendChild(swf);
+});
