@@ -296,6 +296,31 @@ function convertModule(mod) {
         }
     }
 
+    function hasSideEffects(expr) {
+        let info = binaryen.getExpressionInfo(expr);
+        switch (info.id) {
+            case binaryen.ConstId:
+            case binaryen.LocalGetId:
+            case binaryen.GlobalGetId:
+            case binaryen.LoadId:
+            case binaryen.NopId:
+                return false;
+            case binaryen.BinaryId:
+                return hasSideEffects(info.left) ||
+                    hasSideEffects(info.right);
+            case binaryen.UnaryId:
+                // technically, some unary ops overwrite scratch space
+                // this should not be an issue though.
+                return hasSideEffects(info.value);
+            case binaryen.SelectId:
+                return hasSideEffects(info.ifTrue) ||
+                    hasSideEffects(info.ifFalse) ||
+                    hasSideEffects(info.condition);
+            default:
+                return true;
+        }
+    }
+
     function convertFunction(func) {
         const builder = abc.methodBuilder();
         let labelStack = [];
@@ -585,22 +610,34 @@ function convertModule(mod) {
 
             visitCallIndirect: (info) => {
                 // The target for callproperty comes after parameters in Wasm,
-                // but before in AVM2. We could check for side effects and reorder
-                // but for now let's just save some extras.
+                // but before in AVM2.
+                //
+                // We check for possible side effects and use temporaries to evaluate
+                // in order if so; if there are no side effects then they are reordered
+                // for efficiency.
+                //
+                // This check is fairly conservative for now.
 
-                // WARNING: THIS WILL BREAK WITH --trace for now
-                if (trace) {
-                    throw new Error('temp incompatibility with --trace for callIndirect');
+                let args = info.operands.length;
+                let reorder = hasSideEffects(info.target);
+                let paramLocals = [];
+                for (let operand of info.operands) {
+                    reorder = reorder || hasSideEffects(operand);
                 }
 
-                // Store in temporary locals
-                let paramLocals = [];
-                let args = info.operands.length;
-                for (let i = 0; i < args; i++) {
-                    let index = freeLocal++;
-                    paramLocals[i] = index;
-                    traverse(info.operands[i]);
-                    builder.setlocal(index);
+                if (reorder) {
+                    // WARNING: THIS WILL BREAK WITH --trace for now
+                    if (trace) {
+                        throw new Error('temp incompatibility with --trace for callIndirect');
+                    }
+
+                    // Store in temporary locals
+                    for (let i = 0; i < args; i++) {
+                        let index = freeLocal++;
+                        paramLocals[i] = index;
+                        traverse(info.operands[i]);
+                        builder.setlocal(index);
+                    }
                 }
 
                 // Grab the table and the target
@@ -609,14 +646,21 @@ function convertModule(mod) {
                 builder.coerce(arrayName);
                 traverse(info.target);
 
-                // Now get those args back
-                for (let i = 0; i < args; i++) {
-                    builder.getlocal(paramLocals[i]);
-                    builder.kill(paramLocals[i]);
-                }
+                if (reorder) {
+                    // Now get those args back
+                    for (let i = 0; i < args; i++) {
+                        builder.getlocal(paramLocals[i]);
+                        builder.kill(paramLocals[i]);
+                    }
 
-                // And release them for later reuse.
-                freeLocal -= args;
+                    // And release them for later reuse.
+                    freeLocal -= args;
+                } else {
+                    // No side effects, so just pull everything in.
+                    for (let operand of info.operands) {
+                        traverse(operand);
+                    }
+                }
 
                 let pubset = abc.namespaceSet([pubns]);
                 let runtime = abc.multinameL(pubset);
@@ -755,17 +799,20 @@ function convertModule(mod) {
             visitStore: (info) => {
                 // todo: can be isAtomic
 
-                traverse(info.ptr);
-                pushOffset(info.offset);
-
-                traverse(info.value);
-
                 // Flash's si32/si16/si8/sf32/sf64 instructions take
                 // value then pointer, but Wasm stores take pointer
-                // then value. For now do a stack swap but it might
-                // be better to reorder the items when we can confirm
-                // there's no side effects.
-                builder.swap();
+                // then value.
+                let reorder = hasSideEffects(info.ptr) || hasSideEffects(info.value);
+                if (reorder) {
+                    traverse(info.ptr);
+                    pushOffset(info.offset);
+                    traverse(info.value);
+                    builder.swap();
+                } else {
+                    traverse(info.value);
+                    traverse(info.ptr);
+                    pushOffset(info.offset);
+                }
 
                 let value = binaryen.getExpressionInfo(info.value);
                 switch (value.type) {

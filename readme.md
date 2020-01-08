@@ -42,6 +42,8 @@ AVM2 has separate `int` and `uint` types for 32-bit values; we use integer prima
 
 Branches are emitted with byte offsets in the bytecode stream, so need to be translated from labels on the bytecode emitter. Labels must be emitted too, at least for backwards branches. There may be some improvements left to go in label handling.
 
+A couple operations use different stack argument order between the two, like memory stores and indirect calls. These are reordered to match when they have no side effects, or use temporary local variables to preserve execution order.
+
 ## Translation details
 
 binaryen.js is used to parse, optimize, and transform the WebAssembly input binary, and then walk the list of functions and instructions so they can be transformed to ActionScript bytecode ops. I stand on the shoulders of giants.
