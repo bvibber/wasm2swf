@@ -743,6 +743,8 @@ function convertModule(mod) {
                     case binaryen.f64:
                         builder.convert_d();
                         break;
+                    default:
+                        throw new Error('unexpected global type ' + info.type);
                 }
             },
 
