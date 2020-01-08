@@ -1427,8 +1427,8 @@ function convertModule(mod) {
                 builder.returnvoid();
             } else {
                 builder.callproperty(name, argTypes.length);
-                // it will be coerced to the correct type
                 attachDomainMemory(builder);
+                // return value will be coerced to the correct type if different
                 builder.returnvalue();
             }
         }
