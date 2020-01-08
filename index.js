@@ -588,8 +588,7 @@ function convertModule(mod) {
             visitCall: (info) => {
                 builder.getlocal_0(); // this argument
                 info.operands.forEach(traverse);
-                let fname = 'func$' + info.target;
-                let method = abc.qname(privatens, abc.string(fname));
+                let method = qname(privatens, 'func$' + info.target);
                 switch (info.type) {
                     case binaryen.none:
                         builder.callpropvoid(method, info.operands.length);
@@ -867,7 +866,7 @@ function convertModule(mod) {
                     case binaryen.ClzInt32:
                         builder.getlocal_0(); // 'this'
                         traverse(info.value);
-                        builder.callproperty(abc.qname(privatens, abc.string('wasm$clz32')), 1);
+                        builder.callproperty(clz32Name, 1);
                         builder.convert_i();
                         break;
                     case binaryen.CtzInt32:
@@ -885,21 +884,21 @@ function convertModule(mod) {
                     case binaryen.AbsFloat64:
                         builder.getlex(mathName);
                         traverse(info.value);
-                        builder.callproperty(abc.qname(pubns, abc.string('abs')), 1);
+                        builder.callproperty(qname(pubns, 'abs'), 1);
                         builder.convert_d();
                         break;
                     case binaryen.CeilFloat32:
                     case binaryen.CeilFloat64:
                         builder.getlex(mathName);
                         traverse(info.value);
-                        builder.callproperty(abc.qname(pubns, abc.string('ceil')), 1);
+                        builder.callproperty(qname(pubns, 'ceil'), 1);
                         builder.convert_d();
                         break;
                     case binaryen.FloorFloat32:
                     case binaryen.FloorFloat64:
                         builder.getlex(mathName);
                         traverse(info.value);
-                        builder.callproperty(abc.qname(pubns, abc.string('floor')), 1);
+                        builder.callproperty(qname(pubns, 'floor'), 1);
                         builder.convert_d();
                         break;
                     case binaryen.TruncFloat32:
@@ -914,7 +913,7 @@ function convertModule(mod) {
                     case binaryen.SqrtFloat64:
                         builder.getlex(mathName);
                         traverse(info.value);
-                        builder.callproperty(abc.qname(pubns, abc.string('sqrt')), 1);
+                        builder.callproperty(qname(pubns, 'sqrt'), 1);
                         builder.convert_d();
                         break;
 
@@ -1225,7 +1224,7 @@ function convertModule(mod) {
                         builder.getlex(mathName);
                         traverse(info.left);
                         traverse(info.right);
-                        builder.callproperty(abc.qname(pubns, abc.string('min')), 2);
+                        builder.callproperty(qname(pubns, 'min'), 2);
                         builder.convert_d();
                         break;
                     case binaryen.MaxFloat32:
@@ -1233,7 +1232,7 @@ function convertModule(mod) {
                         builder.getlex(mathName);
                         traverse(info.left);
                         traverse(info.right);
-                        builder.callproperty(abc.qname(pubns, abc.string('max')), 2);
+                        builder.callproperty(qname(pubns, 'max'), 2);
                         builder.convert_d();
                         break;
                     
@@ -1291,7 +1290,7 @@ function convertModule(mod) {
             },
 
             visitUnreachable: (info) => {
-                builder.getlex(abc.qname(pubns, abc.string('Error')));
+                builder.getlex(qname(pubns, 'Error'));
                 builder.pushstring(abc.string('unreachable'));
                 builder.construct(1);
                 builder.throw();
@@ -1413,11 +1412,11 @@ function convertModule(mod) {
         } else {
             // Import function.
             //console.log('import from: ' + info.module + '.' + info.base);
-            let name = abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base));
+            let name = qname(privatens, 'import$' + info.module + '$' + info.base);
             instanceTraits.push(abc.trait({
                 name: name,
                 kind: Trait.Slot,
-                type_name: abc.qname(pubns, abc.string('Function'))
+                type_name: qname(pubns, 'Function')
             }));
             imports.push(info);
             builder.getlocal_0();
@@ -1438,8 +1437,8 @@ function convertModule(mod) {
 
         let method = abc.method({
             name: abc.string(info.name),
-            return_type: abc.qname(pubns, abc.string(resultType)),
-            param_types: argTypes.map((type) => abc.qname(pubns, abc.string(type))),
+            return_type: qname(pubns, resultType),
+            param_types: argTypes.map((type) => qname(pubns, type)),
         });
 
         abc.methodBody({
@@ -1452,7 +1451,7 @@ function convertModule(mod) {
         });
 
         instanceTraits.push(abc.trait({
-            name: abc.qname(privatens, abc.string('func$' + info.name)),
+            name: qname(privatens, 'func$' + info.name),
             kind: Trait.Method | Trait.Final,
             disp_id: method, // compiler-assigned, so use the same one
             method
@@ -1778,7 +1777,7 @@ function convertModule(mod) {
                     default:
                         throw new Error('Unexpected constant initializer type');
                 }
-                iinitBody.initproperty(abc.qname(privatens, abc.string('global$' + globalInfo.name)));
+                iinitBody.initproperty(qname(privatens, 'global$' + globalInfo.name));
             } else {
                 throw new Error('Non-constant global initializer');
             }
@@ -1787,30 +1786,30 @@ function convertModule(mod) {
 
     // Initialize the memory
     iinitBody.getlocal_0();
-    iinitBody.getlex(abc.qname(flashutilsns, abc.string('ByteArray')));
+    iinitBody.getlex(byteArrayName);
     iinitBody.construct(0);
     iinitBody.dup();
     iinitBody.pushstring(abc.string('littleEndian'));
-    iinitBody.setproperty(abc.qname(pubns, abc.string('endian')));
+    iinitBody.setproperty(qname(pubns, 'endian'));
     iinitBody.dup();
     iinitBody.pushint_value(2 ** 24); // default to 16 MiB memory for the moment
-    iinitBody.setproperty(abc.qname(pubns, abc.string('length')));
-    iinitBody.initproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
+    iinitBody.setproperty(qname(pubns, 'length'));
+    iinitBody.initproperty(memoryName); // on this
 
     // Set it as domain memory
     function attachDomainMemory(op) {
-        let flashsystemns = abc.namespace(Namespace.Namespace, abc.string('flash.system'));
-        let appDomainName = abc.qname(flashsystemns, abc.string('ApplicationDomain'));
+        let flashsystemns = ns(Namespace.Namespace, 'flash.system');
+        let appDomainName = qname(flashsystemns, 'ApplicationDomain');
 
         // @fixme maybe save the domain for handier access
         op.getlex(appDomainName);
-        op.getproperty(abc.qname(pubns, abc.string('currentDomain')));
+        op.getproperty(qname(pubns, 'currentDomain'));
         op.coerce(appDomainName);
 
         op.getlocal_0();
-        op.getproperty(abc.qname(privatens, abc.string('wasm$memory'))); // on this
+        op.getproperty(memoryName); // on this
 
-        op.setproperty(abc.qname(pubns, abc.string('domainMemory'))); // on ApplicationDomain.currentDomain
+        op.setproperty(qname(pubns, 'domainMemory')); // on ApplicationDomain.currentDomain
     }
     attachDomainMemory(iinitBody);
 
@@ -1820,12 +1819,12 @@ function convertModule(mod) {
         iinitBody.getlocal_0();
         iinitBody.pushint_value(segment.byteOffset);
         iinitBody.pushstring(abc.string(binaryString(segment.data)));
-        iinitBody.callpropvoid(abc.qname(privatens, abc.string('wasm$memory_init')), 2);
+        iinitBody.callpropvoid(qname(privatens, 'wasm$memory_init'), 2);
     }
 
     // Initialize the table
     iinitBody.getlocal_0();
-    iinitBody.getlex(abc.qname(pubns, abc.string('Array')));
+    iinitBody.getlex(arrayName);
     iinitBody.construct(0);
     iinitBody.initproperty(tableName);
 
@@ -1836,7 +1835,7 @@ function convertModule(mod) {
         let segment = mod.getFunctionTableSegmentInfoByIndex(i);
         for (let j = 0; j < segment.functions.length; j++) {
             let name = segment.functions[j];
-            let funcName = abc.qname(privatens, abc.string('func$' + name));
+            let funcName = qname(privatens, 'func$' + name);
 
             let index = segment.offset + j;
             let pubset = abc.namespaceSet([pubns]); // is there a better way to do this?
@@ -1855,9 +1854,9 @@ function convertModule(mod) {
     for (let info of imports) {
         iinitBody.getlocal_0(); // 'this'
         iinitBody.getlocal_1(); // imports
-        iinitBody.getproperty(abc.qname(pubns, abc.string(info.module))); // imports.env
-        iinitBody.getproperty(abc.qname(pubns, abc.string(info.base)));   // imports.env.somethingCool
-        iinitBody.initproperty(abc.qname(privatens, abc.string('import$' + info.module + '$' + info.base)));
+        iinitBody.getproperty(qname(pubns, info.module)); // imports.env
+        iinitBody.getproperty(qname(pubns, info.base));   // imports.env.somethingCool
+        iinitBody.initproperty(qname(privatens, 'import$' + info.module + '$' + info.base));
     }
 
     // Initialize the export object
@@ -1878,24 +1877,24 @@ function convertModule(mod) {
                     let globalId = mod.getGlobal(info.value);
                     let globalInfo = binaryen.getGlobalInfo(globalId);
 
-                    let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
-                    let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                    let name = qname(privatens, 'global$' + globalInfo.name);
+                    let type = qname(pubns, avmType(globalInfo.type));
                     addGlobal(name, type, globalInfo);
                 }
 
                 // @fixme this should export a WebAssembly.Global wrapper object
-                privname = abc.string('global$' + info.value);
+                privname = 'global$' + info.value;
                 break;
             case binaryen.ExternalFunction:
-                privname = abc.string('func$' + info.value);
+                privname = 'func$' + info.value;
                 break;
             case binaryen.ExternalMemory:
                 // @fixme this should export a WebAssembly.Memory wrapper object
-                privname = abc.string('wasm$memory');
+                privname = 'wasm$memory';
                 break;
             case binaryen.ExternalTable:
                 // @fixme this should export a WebAssembly.Table wrapper object
-                privname = abc.string('wasm$table');
+                privname = 'wasm$table';
                 break;
             default: {
                 console.error(info);
@@ -1905,10 +1904,10 @@ function convertModule(mod) {
         let pubname = abc.string(info.name);
         iinitBody.pushstring(pubname)
         iinitBody.getlocal_0(); // 'this'
-        iinitBody.getproperty(abc.qname(privatens, privname));
+        iinitBody.getproperty(qname(privatens, privname));
     }
     iinitBody.newobject(nprops);
-    iinitBody.initproperty(abc.qname(pubns, abc.string('exports')));
+    iinitBody.initproperty(exportsName);
     iinitBody.returnvoid();
 
     abc.methodBody({
@@ -1958,10 +1957,10 @@ function convertModule(mod) {
 
     if (sprite) {
         // We seem to need a Sprite to load a swf
-        let flashdisplayns = abc.namespace(Namespace.Namespace, abc.string('flash.display'));
-        let flasheventsns = abc.namespace(Namespace.Namespace, abc.string('flash.events'));
-        let spriteName = abc.qname(flashdisplayns, abc.string('Sprite'));
-        let wrapperName = abc.qname(pubns, abc.string('Wrapper'));
+        let flashdisplayns = ns(Namespace.Namespace, 'flash.display');
+        let flasheventsns = ns(Namespace.Namespace, 'flash.events');
+        let spriteName = qname(flashdisplayns, 'Sprite');
+        let wrapperName = qname(pubns, 'Wrapper');
 
         // Define the Wrapper sprite class
 
@@ -2010,13 +2009,13 @@ function convertModule(mod) {
         initBody.findpropstrict(className); // find where to store the class property soon...
         initBody.getlex(objectName);
         initBody.pushscope();
-        initBody.getlex(abc.qname(flasheventsns, abc.string('EventDispatcher')));
+        initBody.getlex(qname(flasheventsns, 'EventDispatcher'));
         initBody.pushscope();
-        initBody.getlex(abc.qname(flashdisplayns, abc.string('DisplayObject')));
+        initBody.getlex(qname(flashdisplayns, 'DisplayObject'));
         initBody.pushscope();
-        initBody.getlex(abc.qname(flashdisplayns, abc.string('InteractiveObject')));
+        initBody.getlex(qname(flashdisplayns, 'InteractiveObject'));
         initBody.pushscope();
-        initBody.getlex(abc.qname(flashdisplayns, abc.string('DisplayObjectContainer')));
+        initBody.getlex(qname(flashdisplayns, 'DisplayObjectContainer'));
         initBody.pushscope();
         initBody.getlex(spriteName); // get base class scope
         initBody.pushscope();
