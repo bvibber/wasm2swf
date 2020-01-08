@@ -256,7 +256,16 @@ document.getElementById('decode_video').addEventListener('click', function() {
 
             ogvjs_callback_async_complete: function(ret, cpuTime) {
                 log('async frame complete (should not happen');
-            }
+            },
+
+            ogvjs_callback_explode: function(error) {
+                console.log('explode', error);
+            },
+
+            ogvjs_callback_trace: function(val) {
+                console.log('trace', val);
+            },
+
         };
 
         function startPlayback() {
@@ -553,6 +562,12 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                     drawDelta = delta;
                 },
                 ogvjs_callback_async_complete: function() {},
+                ogvjs_callback_explode: function(error) {
+                    console.log('explode', error);
+                },
+                ogvjs_callback_trace: function(val) {
+                    console.log('trace', val);
+                },
     
                 emscripten_notify_memory_growth: function(){},
                 setTempRet0: function setTempRet0(val) {
@@ -670,6 +685,16 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                         exports.setThrew(1, 0);
                     }
                 },
+                invoke_viiiiiiii: function(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
+                    var sp = exports.stackSave();
+                    try {
+                        exports.dynCall_viiiiiiii(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                },
                 invoke_iii: function(func, arg1, arg2) {
                     var sp = exports.stackSave();
                     try {
@@ -703,6 +728,17 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
                     }
                     return 0; // ??
                 },
+                invoke_iiiiii: function(func, arg1, arg2, arg3, arg4, arg5) {
+                    var sp = exports.stackSave();
+                    try {
+                        return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4, arg5);
+                    } catch (e) {
+                        exports.stackRestore(sp);
+                        if (e !== "longjmp") throw e;
+                        exports.setThrew(1, 0);
+                    }
+                    return 0; // ??
+                },
                 invoke_iiiij: function(func, arg1, arg2, arg3, arg4lo, arg4hi) {
                     var sp = exports.stackSave();
                     try {
@@ -717,7 +753,7 @@ document.getElementById('decode_video_wasm').addEventListener('click', function(
             }
         };
     
-        WebAssembly.instantiateStreaming(fetch('ogv-decoder-video-vp9.wasm'), importObject)
+        WebAssembly.instantiateStreaming(fetch('ogv-decoder-video-vp9.wasm?' + Math.random()), importObject)
         .then(function(obj) {
             codecWasm = obj.instance;
             exports = codecWasm.exports;

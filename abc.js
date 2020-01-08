@@ -1083,7 +1083,7 @@ class MethodBuilder extends ABCBuilder {
 
     callmethod(index, arg_count) {
         this.trace('callmethod',
-            [index],
+            [index, arg_count],
             1 + arg_count,
             1
         );

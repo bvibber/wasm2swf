@@ -1912,7 +1912,8 @@ function convertModule(mod) {
         local_count: iinitBody.max_local + 1,
         init_scope_depth: 3,
         max_scope_depth: 3,
-        code: iinitBody.toBytes()
+        code: iinitBody.toBytes(),
+        max_stack: iinitBody.max_stack
     });
 
     // @fixme maybe add class and instance data in the same call?

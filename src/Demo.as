@@ -69,6 +69,14 @@ package {
                         ogvjs_callback_init_video: makeCallback('ogvjs_callback_init_video'),
                         ogvjs_callback_frame: makeCallback('ogvjs_callback_frame'),
                         ogvjs_callback_async_complete: makeCallback('ogvjs_callback_async_complete'),
+                        ogvjs_callback_explode: function(error:int):void {
+                            trace(error);
+                            throw new Error('explode ' + error);
+                        },
+                        ogvjs_callback_trace: function(val:int):void {
+                            trace(val);
+                            ExternalInterface.call(callback, 'ogvjs_callback_trace', [val]);
+                        },
 
                         // emscripten internals
                         emscripten_notify_memory_growth: emscripten_notify_memory_growth,
@@ -164,6 +172,18 @@ package {
                                 throw e;
                             }
                         },
+                        invoke_viiiiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int, arg6:int, arg7:int, arg8:int):void {
+                            var sp:int = exports.stackSave();
+                            try {
+                                exports.dynCall_viiiiii(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+                            } catch (e:LongJmp) {
+                                exports.stackRestore(sp);
+                                exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                exports.stackRestore(sp);
+                                throw e;
+                            }
+                        },
                         invoke_iii: function(func:int, arg1:int, arg2:int):int {
                             var sp:int = exports.stackSave();
                             try {
@@ -194,6 +214,19 @@ package {
                             var sp:int = exports.stackSave();
                             try {
                                 return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4);
+                            } catch (e:LongJmp) {
+                                exports.stackRestore(sp);
+                                exports.setThrew(1, 0);
+                            } catch (e:Error) {
+                                exports.stackRestore(sp);
+                                throw e;
+                            }
+                            return 0; // ??
+                        },
+                        invoke_iiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int):int {
+                            var sp:int = exports.stackSave();
+                            try {
+                                return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4, arg5);
                             } catch (e:LongJmp) {
                                 exports.stackRestore(sp);
                                 exports.setThrew(1, 0);
