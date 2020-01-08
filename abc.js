@@ -1169,14 +1169,14 @@ class MethodBuilder extends ABCBuilder {
         this.u8(0x76);
     }
 
-    convert_i() {
-        this.trace('convert_i', [], 1, 1);
-        this.u8(0x73);
-    }
-
     convert_d() {
         this.trace('convert_d', [], 1, 1);
         this.u8(0x75);
+    }
+
+    convert_i() {
+        this.trace('convert_i', [], 1, 1);
+        this.u8(0x73);
     }
 
     convert_o() {
