@@ -922,8 +922,7 @@ function convertModule(mod) {
                     // relational
                     case binaryen.EqZInt32:
                         traverse(info.value);
-                        builder.pushbyte(0);
-                        builder.strictequals();
+                        builder.not();
                         builder.convert_i();
                         break;
 
