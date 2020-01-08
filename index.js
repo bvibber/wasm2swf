@@ -729,8 +729,8 @@ function convertModule(mod) {
                 let globalId = mod.getGlobal(info.name);
                 let globalInfo = binaryen.getGlobalInfo(globalId);
 
-                let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
-                let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                let name = qname(privatens, 'global$' + globalInfo.name);
+                let type = qname(pubns, avmType(globalInfo.type));
                 addGlobal(name, type, globalInfo);
         
                 builder.getlocal_0(); // 'this' param
@@ -750,8 +750,8 @@ function convertModule(mod) {
                 let globalId = mod.getGlobal(info.name);
                 let globalInfo = binaryen.getGlobalInfo(globalId);
 
-                let name = abc.qname(privatens, abc.string('global$' + globalInfo.name));
-                let type = abc.qname(pubns, abc.string(avmType(globalInfo.type)));
+                let name = qname(privatens, 'global$' + globalInfo.name);
+                let type = qname(pubns, avmType(globalInfo.type));
                 addGlobal(name, type, globalInfo);
 
                 builder.getlocal_0();
