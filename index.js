@@ -317,6 +317,98 @@ function convertModule(mod) {
             }
         }
 
+        function foldConditional(condition, label) {
+            let cond = binaryen.getExpressionInfo(condition);
+            if (cond.id === binaryen.BinaryId) {
+                // Note these are backwards from 'if' which branches
+                // when the condition is false. :)
+                switch (cond.op) {
+                    case binaryen.EqInt32:
+                    case binaryen.EqFloat32:
+                    case binaryen.EqFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.ifstricteq(label);
+                        return;
+                    case binaryen.NeInt32:
+                    case binaryen.NeFloat32:
+                    case binaryen.NeFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.ifstrictne(label);
+                        return;
+                    case binaryen.LtSInt32:
+                    case binaryen.LtFloat32:
+                    case binaryen.LtFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.iflt(label);
+                        return;
+                    case binaryen.LtUInt32:
+                        traverse(cond.left);
+                        builder.convert_u();
+                        traverse(cond.right);
+                        builder.convert_u();
+                        builder.iflt(label);
+                        return;
+                    case binaryen.LeSInt32:
+                    case binaryen.LeFloat32:
+                    case binaryen.LeFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.ifle(label);
+                        return;
+                    case binaryen.LeUInt32:
+                        traverse(cond.left);
+                        builder.convert_u();
+                        traverse(cond.right);
+                        builder.convert_u();
+                        builder.ifle(label);
+                        return;
+                    case binaryen.GtSInt32:
+                    case binaryen.GtFloat32:
+                    case binaryen.GtFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.ifgt(label);
+                        return;
+                    case binaryen.GtUInt32:
+                        traverse(cond.left);
+                        builder.convert_u();
+                        traverse(cond.right);
+                        builder.convert_u();
+                        builder.ifgt(label);
+                        return;
+                    case binaryen.GeSInt32:
+                    case binaryen.GeFloat32:
+                    case binaryen.GeFloat64:
+                        traverse(cond.left);
+                        traverse(cond.right);
+                        builder.ifge(label);
+                        return;
+                    case binaryen.GeUInt32:
+                        traverse(cond.left);
+                        builder.convert_u();
+                        traverse(cond.right);
+                        builder.convert_u();
+                        builder.ifge(label);
+                        return;
+
+                    default:
+                        // fall through
+                }
+            } else if (cond.id === binaryen.UnaryId) {
+                if (cond.op === binaryen.EqZInt32) {
+                    traverse(cond.value);
+                    builder.iffalse(label);
+                    return;
+                }
+                // fall through
+            }
+
+            traverse(condition);
+            builder.iftrue(label);
+        }
 
         const callbacks = {
             visitBlock: (info) => {
@@ -451,97 +543,7 @@ function convertModule(mod) {
                     traverse(info.value);
                 }
                 if (info.condition) {
-                    let cond = binaryen.getExpressionInfo(info.condition);
-                    if (cond.id === binaryen.BinaryId) {
-                        // Note these are backwards from 'if' :)
-                        switch (cond.op) {
-                            case binaryen.EqInt32:
-                            case binaryen.EqFloat32:
-                            case binaryen.EqFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.ifstricteq(label);
-                                break;
-                            case binaryen.NeInt32:
-                            case binaryen.NeFloat32:
-                            case binaryen.NeFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.ifstrictne(label);
-                                break;
-                            case binaryen.LtSInt32:
-                            case binaryen.LtFloat32:
-                            case binaryen.LtFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.iflt(label);
-                                break;
-                            case binaryen.LtUInt32:
-                                traverse(cond.left);
-                                builder.convert_u();
-                                traverse(cond.right);
-                                builder.convert_u();
-                                builder.iflt(label);
-                                break;
-                            case binaryen.LeSInt32:
-                            case binaryen.LeFloat32:
-                            case binaryen.LeFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.ifle(label);
-                                break;
-                            case binaryen.LeUInt32:
-                                traverse(cond.left);
-                                builder.convert_u();
-                                traverse(cond.right);
-                                builder.convert_u();
-                                builder.ifle(label);
-                                break;
-                            case binaryen.GtSInt32:
-                            case binaryen.GtFloat32:
-                            case binaryen.GtFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.ifgt(label);
-                                break;
-                            case binaryen.GtUInt32:
-                                traverse(cond.left);
-                                builder.convert_u();
-                                traverse(cond.right);
-                                builder.convert_u();
-                                builder.ifgt(label);
-                                break;
-                            case binaryen.GeSInt32:
-                            case binaryen.GeFloat32:
-                            case binaryen.GeFloat64:
-                                traverse(cond.left);
-                                traverse(cond.right);
-                                builder.ifge(label);
-                                break;
-                            case binaryen.GeUInt32:
-                                traverse(cond.left);
-                                builder.convert_u();
-                                traverse(cond.right);
-                                builder.convert_u();
-                                builder.ifge(label);
-                                break;
-
-                            default:
-                                traverse(info.condition);
-                                builder.iftrue(label);
-                                break;
-                        }
-                        return;
-                    } else if (cond.id === binaryen.UnaryId) {
-                        if (cond.op === binaryen.EqZInt32) {
-                            traverse(cond.value);
-                            builder.iffalse(label);
-                            return;
-                        }
-                    }
-
-                    traverse(info.condition);
-                    builder.iftrue(label);
+                    foldConditional(info.condition, label);
                 } else {
                     builder.jump(label);
                 }
@@ -1168,10 +1170,10 @@ function convertModule(mod) {
             visitSelect: (info) => {
                 traverse(info.ifTrue);
                 traverse(info.ifFalse);
-                // @todo optimize condition checks
-                traverse(info.condition);
+
                 let label = new Label();
-                builder.iftrue(label);
+                foldConditional(info.condition, label);
+
                 builder.swap();
                 builder.label(label);
                 builder.pop();

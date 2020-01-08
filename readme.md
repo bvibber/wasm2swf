@@ -70,12 +70,13 @@ Patterns matched:
 * `increment_i`, `decrement_i` opcodes to replace add/subtract by 1/-1
 * `inc_local` / `dec_local` to replace get-inc-set
 * `br_if` + condition -> if-condition
+* `select` + condition -> if-condition
 * `if` + condition -> if-not-condition
 
 ## Todo
 
 * finish the constructor
-    * init function table segments (needs upstream work in binaryen's C and JS APIs)
+    * init function table segments (works but uses a patched binaryen)
     * call the start function
 * write bytecode for the scratch helper functions
 * clean up special wasm2js-related imports (`setTempRet0`, `getTempRet0`, scratch helpers)
