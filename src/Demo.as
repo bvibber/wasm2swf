@@ -175,7 +175,7 @@ package {
                         invoke_viiiiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int, arg6:int, arg7:int, arg8:int):void {
                             var sp:int = exports.stackSave();
                             try {
-                                exports.dynCall_viiiiii(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+                                exports.dynCall_viiiiiiii(func, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
                             } catch (e:LongJmp) {
                                 exports.stackRestore(sp);
                                 exports.setThrew(1, 0);
@@ -226,7 +226,7 @@ package {
                         invoke_iiiiii: function(func:int, arg1:int, arg2:int, arg3:int, arg4:int, arg5:int):int {
                             var sp:int = exports.stackSave();
                             try {
-                                return exports.dynCall_iiiii(func, arg1, arg2, arg3, arg4, arg5);
+                                return exports.dynCall_iiiiii(func, arg1, arg2, arg3, arg4, arg5);
                             } catch (e:LongJmp) {
                                 exports.stackRestore(sp);
                                 exports.setThrew(1, 0);
