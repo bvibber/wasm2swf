@@ -1617,6 +1617,7 @@ class MethodBuilder extends ABCBuilder {
     }
 
     pushint_value(val) {
+        val |= 0;
         if (val >= -128 && val <= 127) {
             this.pushbyte(val);
         } else if (val >= -32768 && val <= 32767) {
