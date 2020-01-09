@@ -383,6 +383,7 @@ class ABCBuilder extends Builder {
     }
 
     s32(val) {
+        /*
         val |= 0;
         let bits = 32 - (val < 0 ? Math.clz32(~val) : Math.clz32(val)) + 1;
         do {
@@ -394,6 +395,9 @@ class ABCBuilder extends Builder {
             this.out(byte);
             val >>>= 7;
         } while (bits > 0);
+        */
+        // this will store extra bits
+        this.u32(val);
     }
 
     u32(val) {
@@ -633,9 +637,12 @@ class ABCFileBuilder extends ABCBuilder {
 
     cpool_info(cpool) {
         this.u30(cpool.integers.length);
+        console.log('cpool.integers {');
         for (let int of cpool.integers.slice(1)) {
             this.s32(int);
+            console.log(int);
         }
+        console.log('}');
 
         this.u30(cpool.uintegers.length);
         for (let uint of cpool.uintegers.slice(1)) {
