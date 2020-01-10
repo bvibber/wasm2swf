@@ -2,17 +2,19 @@
 
 A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
-**`wasm2swf` is a work in progress and doesn't produce fully working output yet.**
+**`wasm2swf` is a work in progress; it produces working output but needs API improvements.**
 
 ## What?
 
-This aims to be a tool that compiles standalone WebAssembly modules (`.wasm`) into ActionScript bytecode (`.abc`) files implementing a class which can be loaded and used by ActionScript 3 code in a Flash "movie" (`.swf`).
+This aims to be a tool that compiles standalone WebAssembly modules (`.wasm`) into ActionScript bytecode (`.abc`) implementing a class which can be loaded and used by ActionScript 3 code in a Flash "movie" (`.swf`).
 
 ## Why?
 
 Niche interest: for legacy Internet Explorer 11 support, JavaScript cross-compilation with emscripten or wasm2js produces workable code but has relatively poor performance and lacks threading. Since IE 11 comes with Flash (assuming Microsoft or Adobe don't flip a global kill switch) and Flash's ActionScript Virtual Machine (AVM2) is in some ways more advanced, it's worth investigating conversion.
 
-However if that kill switch arrives at the end of 2020 as planned, updated Windows machines will stop being able to use it. So this is a bit of an academic exercise which may or may not have direct utility.
+In testing with Theora, VP8, and VP9 video codecs performance is roughly 2x faster than `wasm2js`'s output in IE 11, but 2-3x slower than native WebAssembly in current browsers.
+
+However if that kill switch arrives at the end of 2020 as planned, updated Windows machines will stop being able to run it in IE 11. So this is a bit of an academic exercise. There may be some use for folks integrating new code into legacy Air desktop applications.
 
 ## How?
 
