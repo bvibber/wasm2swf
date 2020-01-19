@@ -1,20 +1,31 @@
 {
   "name": "wasm2swf",
   "version": "0.1.0",
-  "description": "WebAssembly to ActionScript3 bytecode compiler",
+  "description": "WebAssembly to ActionScript bytecode compiler",
+  "keywords": [
+    "WebAssembly",
+    "ActionScript",
+    "Flash"
+  ],
+  "license": "MIT",
   "main": "index.js",
+  "bin": {
+    "wasm2swf": "src/wasm2swf.js"
+  },
+  "files": [
+    "index.js",
+    "src/*.js",
+    "lib/*.js",
+    "*.md"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Brion Vibber <brion@pobox.com>",
-  "license": "MIT",
-  "dependencies": {
-    "binaryen": "^89.0.0-nightly.20191219"
-  },
+  "repository": "github:brion/wasm2swf",
+  "dependencies": {},
   "devDependencies": {
     "webpack": "^4.41.5",
-    "webpack-cli": "^3.3.10",
-    "yuv-buffer": "^1.0.0",
-    "yuv-canvas": "^1.2.6"
+    "webpack-cli": "^3.3.10"
   }
 }
