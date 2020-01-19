@@ -1,6 +1,6 @@
 {
   "name": "wasm2swf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "WebAssembly to ActionScript bytecode compiler",
   "keywords": [
     "WebAssembly",
