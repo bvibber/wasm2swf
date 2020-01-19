@@ -7,10 +7,10 @@ all : demo
 demo : build/module.swf build/demo.swf build/index.js build/index.html
 
 clean :
-	rm -f demo/demo.swf
-	rm -f demo/module.swf
-	rm -f demo/index.js
-	rm -f demo/index.html
+	rm -f build/demo.swf
+	rm -f build/module.swf
+	rm -f build/index.js
+	rm -f build/index.html
 
 distclean : clean
 	rm -f apache-flex-sdk-*-bin.tar.gz
