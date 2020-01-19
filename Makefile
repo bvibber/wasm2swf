@@ -4,19 +4,20 @@ all : demo
 
 .FAKE : all demo clean distclean
 
-demo : demo/module.swf demo/demo.swf demo/index.js
+demo : build/module.swf build/demo.swf build/index.js build/index.html
 
 clean :
 	rm -f demo/demo.swf
 	rm -f demo/module.swf
 	rm -f demo/index.js
+	rm -f demo/index.html
 
 distclean : clean
 	rm -f apache-flex-sdk-*-bin.tar.gz
 	rm -rf apache-flex-sdk-*-bin
 	rm -f flashplayer-libs
 
-AS3_SOURCES=src/Demo.as
+AS3_SOURCES=demo/Demo.as
 
 # -----------
 # Flash stuff
@@ -39,10 +40,11 @@ FLEXSDK_LIBS_DEP:=$(FLEXSDK_DIR)/frameworks/libs/osmf.swc
 FLEXSDK_PLAYERGLOBAL_DEP:=$(PLAYERGLOBAL_DIR)/playerglobal.swc
 FLEXSDK_ALL_DEP:=$(FLEXSDK_BASE_DEP) $(FLEXSDK_LIBS_DEP) $(FLEXSDK_PLAYERGLOBAL_DEP)
 
-demo/demo.swf : $(AS3_SOURCES) $(FLEXSDK_ALL_DEP)
+build/demo.swf : $(AS3_SOURCES) $(FLEXSDK_ALL_DEP)
+	mkdir -p build
 	FLEX_HOME="$(HERE)/$(FLEXSDK_DIR)" \
 	PLAYERGLOBAL_HOME="$(HERE)/$(PLAYERGLOBAL_BASE)" \
-	$(FLEXSDK_DIR)/bin/mxmlc -target-player 27.0 -debug -o demo/demo.swf -- src/Demo.as
+	$(FLEXSDK_DIR)/bin/mxmlc -target-player 27.0 -debug -o build/demo.swf -- demo/Demo.as
 
 $(FLEXSDK_BASE_DEP) :
 	curl -o "$(FLEXSDK_ARCHIVE)" "$(FLEXSDK_URL)"
@@ -57,11 +59,17 @@ $(FLEXSDK_PLAYERGLOBAL_DEP) : $(FLEXSDK_BASE_DEP)
 	mkdir -p "$(PLAYERGLOBAL_DIR)"
 	curl -o "$(PLAYERGLOBAL_DIR)/playerglobal.swc" "$(PLAYERGLOBAL_URL)"
 
-demo/module.swf : sample/sample.wasm index.js swf.js abc.js
-	node index.js --sprite -o demo/module.swf sample/sample.wasm
+build/module.swf : sample/sample.wasm index.js src/wasm2swf.js src/swf.js src/abc.js src/utils.js
+	mkdir -p build
+	node index.js --sprite -o build/module.swf sample/sample.wasm
 
 sample/sample.wasm :
 	(cd sample && make)
 
-demo/index.js : src/demo.js webpack.config.js
+build/index.js : demo/demo.js webpack.config.js
+	mkdir -p build
 	npx webpack --config webpack.config.js
+
+build/index.html : demo/index.html
+	mkdir -p build
+	cp -p demo/index.html build/index.html

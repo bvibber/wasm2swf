@@ -637,12 +637,9 @@ class ABCFileBuilder extends ABCBuilder {
 
     cpool_info(cpool) {
         this.u30(cpool.integers.length);
-        console.log('cpool.integers {');
         for (let int of cpool.integers.slice(1)) {
             this.s32(int);
-            console.log(int);
         }
-        console.log('}');
 
         this.u30(cpool.uintegers.length);
         for (let uint of cpool.uintegers.slice(1)) {
