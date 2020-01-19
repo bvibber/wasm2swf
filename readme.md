@@ -2,7 +2,7 @@
 
 A highly experimental WebAssembly to ActionScript (AVM2) bytecode compiler.
 
-**`wasm2swf` is a work in progress; it produces working output but needs API improvements.**
+**`wasm2swf` is a work in progress; it produces working output but could use improvements.**
 
 ## What?
 
@@ -137,3 +137,15 @@ This has a couple advantages over static linking: you can run different modules 
 To efficiently use linear memory, domain memory opcodes are used for loads and stores. But configuring the `ByteArray` to use for domain memory requires use of `flash.system.ApplicationDomain` which isn't available in `avmshell`.
 
 In theory it could work with the `redtamarin` shell, customized to use its alternate `shell.Domain` API, but it crashes when I test it.
+
+# License
+
+`wasm2swf` is open source, available under an MIT-style license:
+
+Copyright 2020 Brion Vibber
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
